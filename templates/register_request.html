@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Society Registration Request</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* --- CORE CENTERING FIX --- */
+        body {
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center; /* Centers horizontally */
+            align-items: center;    /* Centers vertically */
+            min-height: 100vh;
+            margin: 0; 
+            padding-bottom: 50px; /* Add some padding if the card is very tall */
+        }
+        /* --- CARD AND HEADER STYLING --- */
+        .register-card {
+            max-width: 450px;
+            width: 90%; 
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0,0,0,.15);
+            margin: 20px auto; 
+        }
+        .register-card .card-header {
+            /* Tri-color theme for header */
+            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #138808 100%);
+            color: #000080;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            text-align: center;
+            padding: 15px 10px; 
+            font-weight: 700;
+            border-bottom: 5px solid #000080;
+            display: flex; 
+            justify-content: center;
+            align-items: center; 
+            font-size: clamp(1.2rem, 4vw, 1.5rem); 
+        }
+        
+        /* --- ASHOKA CHAKRA STYLING --- */
+        .ashoka-chakra {
+            width: 45px; 
+            height: 45px; 
+            margin-right: 5px; /* Reduced spacing */
+            animation: spin 4s linear infinite;
+            flex-shrink: 0; 
+        }
+        
+        /* Container for text: ensures horizontal alignment and no wrapping */
+        .header-text-container {
+            display: flex; 
+            flex-direction: row; 
+            justify-content: center;
+            align-items: center; 
+            white-space: nowrap; 
+            line-height: 1; 
+        }
+        
+        /* --- BUTTONS AND LINKS --- */
+        .register-card .btn-primary {
+            background-color: #000080;
+            border-color: #000080;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .register-card .btn-primary:hover {
+            background-color: #000055;
+        }
+        .back-link {
+            display: block;
+            margin-top: 15px;
+            text-align: center;
+            color: #007bff;
+        }
+        .back-link:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+        
+        /* --- SIVA STYLING & ANIMATIONS --- */
+        .siva-text {
+            font-weight: 900;
+            font-size: 1.8em; /* INCREASED from 1.5em to 1.8em */
+            background: linear-gradient(270deg, gold, orange, yellow, green, blue, indigo, violet, gold);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
+            margin-left: 6px;
+            white-space: nowrap;
+            animation: rainbow 6s ease infinite;
+        }
+
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* --- END SIVA STYLING --- */
+
+        /* --- FOOTER STYLING (NEW) --- */
+        .card-body footer {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+    </style>
+</head>
+<body>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; z-index: 1000;">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'info') }} mb-3">
+            {{ message }}
+          </div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="register-card card">
+        <div class="card-header">
+            <svg class="ashoka-chakra" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="#000080" stroke-width="2"/>
+                {% for i in range(24) %}
+                  <line x1="12" y1="12" x2="12" y2="2" transform="rotate({{ i * 15 }}, 12, 12)" stroke="#000080" stroke-width="1"/>
+                {% endfor %}
+            </svg>
+            
+            <span class="header-text-container">
+                Society Pre-Registration
+                <span class="siva-text">SIVA</span>
+            </span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted text-center">Submit contact details to request an invitation link for your society.</p>
+            
+            <form method="POST" action="{{ url_for('register_request') }}">
+                
+                <div class="form-group">
+                    <label for="society_name">Society/Community Name</label>
+                    <input type="text" class="form-control" id="society_name" name="society_name" 
+                           required oninput="this.value = this.value.toUpperCase()">
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Admin Email (for Invitation Link)</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="mobile_number">Admin Mobile Number</label>
+                    <input type="tel" class="form-control" id="mobile_number" name="mobile_number" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block mt-4">Submit Request</button>
+            </form>
+            <footer>
+                <p class="text-center" style="margin: 0; font-weight: 500;">
+                    D3 by: 
+                    <a href="mailto:siva.admn25@gmail.com" style="color: #0000FF; text-decoration: underline;">
+                        siva.admn25@gmail.com
+                    </a>
+                </p>
+            </footer>
+            
+            </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>    
+        // Prevent console/developer tools access
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if (
+            e.key === "F12" ||
+            (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key.toUpperCase())) ||
+            (e.ctrlKey && e.key.toUpperCase() === "U")
+            ) e.preventDefault();    
+        });    
+    </script>  
+</body>
+</html>

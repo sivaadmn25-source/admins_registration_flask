@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Society Registration</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* --- CORE CENTERING FIX --- */
+        body { 
+            padding-top: 20px; 
+            background-color: #f4f7f6; 
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+        
+        .container { 
+            max-width: 600px; 
+            margin-top: 50px;
+        }
+        
+        .card { 
+            box-shadow: 0 8px 16px rgba(0,0,0,.15);
+            border-radius: 10px;
+            border: none;
+        }
+
+        /* Tri-color header and rotating Ashoka Chakra */
+        .card-header {
+            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #138808 100%);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            flex-wrap: nowrap;
+            padding: 15px 10px;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            border-bottom: 5px solid #000080;
+        }
+        
+        .card-header img {
+            width: 45px;
+            height: 45px;
+            margin-right: 10px;
+            animation: spin 6s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            flex-wrap: nowrap;
+            color: #000080;
+            font-weight: bold;
+            font-size: clamp(1.2rem, 4vw, 1.7rem);
+        }
+
+        .siva-text {
+            font-weight: 900;
+            font-size: 1.8em;
+            background: linear-gradient(270deg, gold, orange, yellow, green, blue, indigo, violet, gold);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
+            margin-left: 6px;
+            white-space: nowrap;
+            animation: rainbow 6s ease infinite;
+        }
+
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Style for disabled checkbox label */
+        .form-check-label[disabled] {
+            color: #6c757d !important;
+            cursor: not-allowed;
+        }
+
+        /* Style for readonly/plaintext fields */
+        .form-control-plaintext {
+            padding-top: .375rem;
+            padding-bottom: .375rem;
+            margin-bottom: 0;
+            line-height: 1.5;
+            background-color: #f8f9fa; /* Light grey background to indicate readonly */
+            border: 1px solid #ced4da; /* Subtle border */
+        }
+        
+        /* Responsive for very small screens */
+        @media (max-width: 450px) {
+            .card-header {
+                justify-content: center;
+                text-align: center;
+            }
+            .card-header img {
+                margin-right: 5px; 
+            }
+            .header-title {
+                display: flex;
+                flex-direction: column;
+                font-size: 1.2rem;
+            }
+            .siva-text {
+                font-size: 1.5em;
+                margin-left: 0;
+                margin-top: 2px;
+            }
+        }
+        
+        /* --- Developer Footer Styling --- */
+        .developer-footer {
+            margin-top: 30px;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .developer-footer a {
+            color: #0000FF;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header text-white">
+                <img src="{{ url_for('static', filename='images/Ashoka_Chakra.svg') }}" alt="Ashoka Chakra" >
+                <h3 class="header-title">Society Admin Registration <span class="siva-text">SIVA</span></h3>
+            </div>
+
+            <div class="card-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'warning') }}" role="alert">
+                        {{ message }}
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+
+                <p class="text-info">
+                    Please fill in the remaining details for your society. This invitation will expire on: 
+                    <strong>{{ invite.invite_end_at.strftime('%Y-%m-%d %H:%M') }}</strong>
+                </p>
+
+                <form method="POST">
+                    <input type="hidden" name="token" value="{{ invite.invite_token }}">
+
+                    <div class="form-group">
+                        <label for="society_name">Society Name (Unique Identifier):</label>
+                        <input 
+                            type="text" 
+                            class="form-control form-control-plaintext" 
+                            id="society_name" 
+                            name="society_name" 
+                            value="{{ invite.society_name }}" 
+                            readonly
+                            required 
+                            placeholder="e.g., SRGF, MATA "
+                            style="text-transform: uppercase;">
+                        <small class="form-text text-muted">
+                            **This name was pre-approved and cannot be changed.**
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Admin Email (Unique):</label>
+                        <input 
+                            type="email" 
+                            class="form-control form-control-plaintext" 
+                            id="email" 
+                            name="email" 
+                            value="{{ invite.email }}" 
+                            readonly
+                            required 
+                            placeholder="e.g., admin@yoursociety.com">
+                        <small class="form-text text-muted">
+                            **This email was pre-approved and cannot be changed.**
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Set Master Password:</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                        <small class="form-text text-muted">This will be the main admin password for the society.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mobile_number">Admin (10-digit) Mobile Number:</label>
+                        <input type="tel" class="form-control" id="mobile_number" name="mobile_number" pattern="[0-9]{10}" required placeholder="10-digit number">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="house_type">Housing Type:</label>
+                        <select class="form-control" id="house_type" name="house_type" required>
+                            <option value="" disabled selected>Select Society Type</option>
+                            {% for type in house_type %} 
+                                {% if type != 'xyz' %}
+                                    <option value="{{ type }}">{{ type }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max_voters">Max Voters (Total number of units/voters):</label>
+                        <input type="number" class="form-control" id="max_voters" name="max_voters" required min="1" placeholder="e.g., 250">
+                    </div>
+
+                    <div class="form-group form-check">
+                        <input type="checkbox" class="form-check-input" id="is_towerwise" name="is_towerwise" disabled>
+                        <label class="form-check-label" for="is_towerwise" data-toggle="tooltip" data-placement="top"
+                            title="Check this if committee members should be elected and represent only their specific Tower/Block. If unchecked, elections will be community-wide (cumulative)."
+                            disabled>
+                            Restrict Voting and Representation to Specific Tower or Block?
+                        </label>
+                        <small class="form-text text-muted" id="towerwise-hint">
+                            *This option is enabled only for Multi-Tower Apartment complexes.
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">Voting Type per House:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="vote_per_house" id="one_vote_per_house" value="false" checked>
+                            <label class="form-check-label" for="one_vote_per_house">
+                                1 Vote per House
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="vote_per_house" id="multiple_votes_per_house" value="true">
+                            <label class="form-check-label" for="multiple_votes_per_house">
+                                Multiple Votes per House
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Choose the voting type for your society. This will be visible in pending approvals.
+                        </small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">Submit Registration for Approval</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="developer-footer">
+            D3 by: 
+            <a href="mailto:siva.admn25@gmail.com">
+                siva.admn25@gmail.com
+            </a>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        const MULTI_TOWER_TYPE = 'Apartment-Multi Towers';
+
+        function updateTowerwiseState() {
+            const housingType = document.getElementById('house_type').value;
+            const towerwiseCheckbox = document.getElementById('is_towerwise');
+            const enable = housingType === MULTI_TOWER_TYPE;
+
+            if (enable) {
+                towerwiseCheckbox.disabled = false;
+                towerwiseCheckbox.closest('.form-check').querySelector('label').removeAttribute('disabled');
+            } else {
+                towerwiseCheckbox.disabled = true;
+                towerwiseCheckbox.checked = false;
+                towerwiseCheckbox.closest('.form-check').querySelector('label').setAttribute('disabled', 'true');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            $('[data-toggle="tooltip"]').tooltip();
+            const houseTypeSelect = document.getElementById('house_type');
+            updateTowerwiseState(); 
+            houseTypeSelect.addEventListener('change', updateTowerwiseState);
+        });
+        // Anti-debugging/anti-inspection code
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if (
+            e.key === "F12" ||
+            (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key.toUpperCase())) ||
+            (e.ctrlKey && e.key.toUpperCase() === "U")
+            ) e.preventDefault();    
+        });     
+    </script>
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Dashboard</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+
+    <style>
+        body {
+            padding-top: 20px;
+            padding-bottom: 70px; /* Space for the fixed footer */
+            background-color: #f4f7f6;
+        }
+        .container {
+            max-width: 1200px;
+            position: relative; /* Needed for absolute positioning of super-admin-link */
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,.08);
+        }
+
+        /* --- HEADER --- */
+        .dashboard-header {
+            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #138808 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 20px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            position: relative;
+            border: 1px solid #000080;
+            text-align: center;
+        }
+
+        .dashboard-header img {
+            width: 55px;  /* smaller chakra */
+            height: 55px;
+            margin-right: 12px;
+            animation: spin 4s linear infinite; /* faster smooth spin */
+        }
+
+        .dashboard-header h1 {
+            color: #000080;
+            font-weight: 800;
+            font-size: 2em;
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .siva-text {
+            font-weight: 900;
+            font-size: 1.6em;
+            background: linear-gradient(270deg, gold, orange, yellow, green, blue, indigo, violet, gold);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 6px rgba(0,0,0,0.8);
+            margin-left: 10px;
+            animation: rainbow 6s ease infinite;
+            white-space: nowrap;
+        }
+
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- LOGIN CARD --- */
+        .login-card .ashoka-chakra {
+            animation: spin 4s linear infinite;
+        }
+
+        .login-card {
+            max-width: 400px;
+            margin: 100px auto;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 8px 16px rgba(0,0,0,.15);
+        }
+
+        .login-card .card-header {
+            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #138808 100%);
+            color: #000080;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 5px solid #000080;
+        }
+
+        .login-card .btn-primary {
+            background-color: #000080;
+            border-color: #000080;
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 600;
+        }
+
+        .login-card .btn-primary:hover {
+            background-color: #000055;
+        }
+
+        /* --- TABLE STYLING --- */
+        .table-responsive-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .invite-link-input.copy-success {
+            border: 2px solid #28a745 !important;
+            box-shadow: 0 0 5px #28a745;
+            transition: all 0.2s;
+        }
+        
+        /* Master Erase specific styling */
+        .master-erase-card .card-header {
+            background-color: #dc3545 !important;
+        }
+        
+        /* NEW STYLE: Table for Master Erase (and generally for scrolling) */
+        .table-responsive {
+            max-height: 400px; /* Limit height for long lists */
+            overflow-y: auto;
+        }
+        
+        /* NEW STYLE: for the discreet Super Admin link */
+        .super-admin-link {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            color: #333;
+            font-weight: bold;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.7);
+            transition: background-color 0.2s;
+            z-index: 100;
+            border: 1px solid #ccc;
+        }
+        .super-admin-link:hover {
+            background-color: rgba(255, 255, 255, 0.9);
+            color: #000;
+        }
+        
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        {% if not is_authenticated %}
+        <a href="{{ url_for('super_admin_dashboard') }}" class="super-admin-link">Super Admin Login</a>
+        {% endif %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'info') }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if not is_authenticated %}
+        <div class="login-card card">
+            <div class="card-header">
+                <h4>
+                    <svg class="ashoka-chakra mx-auto" viewBox="0 0 24 24" fill="none" width="45" height="45">
+                        <circle cx="12" cy="12" r="10" stroke="#000080" stroke-width="2"/>
+                        {% for i in range(24) %}
+                        <line x1="12" y1="12" x2="12" y2="2" transform="rotate({{ i * 15 }}, 12, 12)" stroke="#000080" stroke-width="1"/>
+                        {% endfor %}
+                    </svg>
+                    System Access Required</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-center text-muted">Enter password for administrator.</p>
+                <form method="POST" action="{{ url_for('super_admin_dashboard') }}">
+                    <div class="form-group">
+                        <label for="password" class="font-weight-bold">System Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required autofocus>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block mt-4">Verify and Proceed</button>
+                </form>
+            </div>
+        </div>
+
+        {% else %}
+        <div class="dashboard-header">
+            <img src="{{ url_for('static', filename='images/Ashoka_Chakra.svg') }}" alt="Ashoka Chakra" >
+            <h1>Super Admin Dashboard <span class="siva-text">SIVA</span></h1>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger ml-3">Logout</a>
+        </div>
+
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h4>1️⃣ Generate New Society Invitation</h4>
+            </div>
+            <div class="card-body">
+                <p>Click below to generate a new unique, time-bound invitation link (valid for 14 days).</p>
+                <form method="POST" action="{{ url_for('super_admin_dashboard') }}">
+                    <input type="hidden" name="action" value="create_invite">
+                    <button type="submit" class="btn btn-success btn-lg">Generate Invitation</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h4>2️⃣ Pending Registration Requests 📨</h4>
+            </div>
+            <div class="card-body">
+                {% if pending_requests %}
+                <div class="table-responsive-scroll">
+                    <table class="table table-striped table-hover table-sm">
+                        <thead class="thead-dark sticky-top">
+                            <tr>
+                                <th>ID</th>
+                                <th>Society Name</th>
+                                <th>Email</th>
+                                <th>Mobile</th>
+                                <th>Submitted</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in pending_requests %}
+                            <tr>
+                                <td>{{ req.id }}</td>
+                                <td>{{ req.society_name }}</td>
+                                <td>{{ req.email }}</td>
+                                <td>{{ req.mobile_number }}</td>
+                                <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('approve_request', request_id=req.id) }}" 
+                                        onsubmit="return confirm('APPROVE {{ req.society_name }}? This generates an invite link.');" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-success">Approve & Invite</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('reject_request', request_id=req.id) }}" 
+                                        onsubmit="return confirm('REJECT {{ req.society_name }}?');" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No pending registration requests at this time.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h4>3️⃣ Pending Society Approvals 📝</h4>
+            </div>
+            <div class="card-body">
+                {% if pending_approvals %}
+                <div class="table-responsive-scroll">
+                    <table class="table table-striped table-hover table-sm">
+                        <thead class="thead-dark sticky-top">
+                            <tr>
+                                <th>Society</th>
+                                <th>Email / Mobile</th>
+                                <th>Max Voters</th>
+                                <th>Type</th>
+                                <th>Submitted</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for society in pending_approvals %}
+                            <tr>
+                                <td>{{ society.society_name }}</td>
+                                <td>{{ society.email }} / {{ society.mobile_number }}</td>
+                                <td>{{ society.max_voters }}</td>
+                                <td>{{ society.housing_type }}</td>
+                                <td>{{ society.responded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('approve_society', society_name=society.society_name) }}" 
+                                        onsubmit="return confirm('Approve {{ society.society_name }}?');" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('reject_society', society_name=society.society_name) }}" 
+                                        onsubmit="return confirm('Reject {{ society.society_name }}?');" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No pending societies awaiting approval.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card master-erase-card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0"><i class="fas fa-radiation"></i> 5️⃣ MASTER ERASE: Select Society to Erase (DANGER ZONE)</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-danger font-weight-bold">
+                    ⚠️ WARNING: This action is irreversible and will permanently delete ALL non-archived data for the selected society from the database.
+                </p>
+                
+                {% if societies %}
+                    <div class="form-group row">
+                        <label for="societySelector" class="col-md-5 col-form-label">Select Society to Erase:</label>
+                        <div class="col-md-7">
+                            <select class="form-control" id="societySelectorDropdown" required>
+                                <option value="">-- Choose Society to Erase --</option>
+                                {% for society_name in societies %}
+                                    <option value="{{ society_name }}">{{ society_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="button" 
+                            class="btn btn-lg btn-block btn-danger mt-3" 
+                            id="eraseTriggerButton"
+                            data-toggle="modal" 
+                            data-target="#eraseConfirmModal"
+                            disabled>
+                        <i class="fas fa-trash-alt"></i> Initiate Permanent Erase
+                    </button>
+                {% else %}
+                    <p class="mb-0 text-secondary">No approved societies currently in the active database.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h4>4️⃣ Active/Unused Invitation Links ✉️</h4>
+            </div>
+            <div class="card-body">
+                {% if active_invites %}
+                <div class="table-responsive-scroll">
+                    <table class="table table-striped table-hover table-sm">
+                        <thead class="thead-light sticky-top">
+                            <tr>
+                                <th>Placeholder</th>
+                                <th>Email</th>
+                                <th>Invited</th>
+                                <th>Expires</th>
+                                <th>Link (Click to Copy)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invite in active_invites %}
+                            <tr>
+                                <td>{{ invite.society_name }}</td>
+                                <td>{{ invite.email }}</td>
+                                <td>{{ invite.invited_at.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ invite.invite_end_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm invite-link-input" readonly
+                                            value="{{ base_url }}{{ invite.invite_token }}">
+                                    <small class="text-muted">Token: {{ invite.invite_token[:8] }}...</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No active invitations. Generate a new one above!</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="modal fade" id="eraseConfirmModal" tabindex="-1" role="dialog" aria-labelledby="eraseConfirmModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content border-danger">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="eraseConfirmModalLabel"><i class="fas fa-skull-crossbones"></i> Confirm Permanent Data Deletion</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-large">You are about to permanently delete **ALL** non-archived data for society: <strong id="societyNamePlaceholder" class="text-danger"></strong>.</p>
+                        <p class="text-danger font-weight-bold">THIS ACTION IS IRREVERSIBLE AND CANNOT BE UNDONE.</p>
+                        <p>Please type the society name (in uppercase) below to confirm this action:</p>
+                        
+                        <input type="text" id="societyNameConfirmation" class="form-control mb-3" placeholder="Type society name (e.g., SRGF)">
+                        
+                        <form id="eraseForm" method="POST" action="{{ url_for('erase_society') }}">
+                            <input type="hidden" name="society_name" id="hiddenSocietyName">
+                            <button type="submit" id="finalEraseButton" class="btn btn-danger btn-block" disabled>
+                                <i class="fas fa-bomb"></i> PERMANENTLY ERASE DATA
+                            </button>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel & Abort</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        // Existing script for copying invitation links
+        document.querySelectorAll('.invite-link-input').forEach(input => {
+            input.addEventListener('click', function() {
+                this.select();
+                document.execCommand('copy');
+                const original = this.value;
+                this.value = '✅ Link Copied!';
+                this.classList.add('copy-success');
+                setTimeout(() => {
+                    this.value = original;
+                    this.classList.remove('copy-success');
+                }, 1000);
+            });
+        });
+
+        // NEW SCRIPT for Master Erase Modal Logic (FIXED)
+   // NEW SCRIPT for Master Erase Modal Logic (UPDATED FOR DROPDOWN)
+    document.addEventListener('DOMContentLoaded', function() {
+    const societySelectorDropdown = document.getElementById('societySelectorDropdown'); // NEW
+    const eraseTriggerButton = document.getElementById('eraseTriggerButton');         // NEW
+    
+    const societyNameConfirmationInput = document.getElementById('societyNameConfirmation');
+    const finalEraseButton = document.getElementById('finalEraseButton');
+    const hiddenSocietyNameInput = document.getElementById('hiddenSocietyName');
+    const societyNamePlaceholder = document.getElementById('societyNamePlaceholder');
+    
+    // 1. Enable/Disable trigger button based on dropdown selection
+    if (societySelectorDropdown && eraseTriggerButton) {
+        societySelectorDropdown.addEventListener('change', function() {
+            if (this.value) {
+                eraseTriggerButton.disabled = false;
+            } else {
+                eraseTriggerButton.disabled = true;
+            }
+        });
+    }
+
+    // 2. Setup the modal when the trigger button is clicked
+    $('#eraseConfirmModal').on('show.bs.modal', function (event) {
+        // CRITICAL FIX: Get the society name from the DROPDOWN VALUE
+        const selectedSociety = societySelectorDropdown ? societySelectorDropdown.value : '';
+        
+        // Reset confirmation inputs and button
+        societyNameConfirmationInput.value = '';
+        finalEraseButton.disabled = true;
+        
+        // Set values in the modal
+        societyNamePlaceholder.textContent = selectedSociety;
+        hiddenSocietyNameInput.value = selectedSociety; // Set the value to be submitted
+    });
+
+    // 3. Enable/Disable the final erase button based on typed confirmation
+    societyNameConfirmationInput.addEventListener('input', function() {
+        // Force input to be uppercase to match society name format (convention)
+        this.value = this.value.toUpperCase(); 
+
+        const societyName = hiddenSocietyNameInput.value;
+        // Check if the input exactly matches the society name set in the hidden field
+        if (this.value === societyName) {
+            finalEraseButton.disabled = false;
+        } else {
+            finalEraseButton.disabled = true;
+        }
+    });
+});
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if (
+            e.key === "F12" ||
+            (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key.toUpperCase())) ||
+            (e.ctrlKey && e.key.toUpperCase() === "U")
+            ) e.preventDefault();    
+        });    
+    </script>
+    <footer class="fixed-bottom text-center text-muted" style="font-size: 1rem; padding: 10px; background-color: #f4f7f6; z-index: 1000;">
+        D3 by: 
+        <a href="mailto:siva.admn25@gmail.com" style="color: #0000FF; text-decoration: underline;" class="hover:text-blue-700">
+            siva.admn25@gmail.com
+        </a>
+    </footer>
+
+</body>
+</html>
