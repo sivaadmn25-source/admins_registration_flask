@@ -17,36 +17,43 @@ from flask_mail import Mail, Message
 # Define your local timezone (assuming IST)
 IST = pytz.timezone('Asia/Kolkata') 
 
+# --- Load environment variables ---
+load_dotenv()
 
-# --- CONFIGURATION ---
-load_dotenv() 
+# --- DATABASE CONFIGURATION ---
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
 
-DB_NAME = os.getenv("PG_DBNAME")
-DB_USER = os.getenv("PG_USER")
-DB_PASSWORD = os.getenv("PG_PASSWORD")
-DB_HOST = os.getenv("PG_HOST")
-DB_PORT = os.getenv("PG_PORT")
-
+# --- FLASK APP SETUP ---
 app = Flask(__name__)
-# --- NEW: EMAIL CONFIGURATION LOADING ---
+
+# --- SECRET KEY (used for session & flash security) ---
+app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
+
+# --- EMAIL CONFIGURATION ---
 app.config.update(
     MAIL_SERVER=os.getenv('MAIL_SERVER'),
     MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
     MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1'],
     MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
     MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
-    MAIL_DEFAULT_SENDER=os.getenv('MAIL_SENDER')
+    MAIL_DEFAULT_SENDER=os.getenv('MAIL_SENDER', os.getenv('MAIL_USERNAME'))
 )
+
 mail = Mail(app)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secure_key_1234")
-# ---------------------------------------- 
 
-# --- CONSTANTS FOR INITIAL SETUP ---
-SYSTEM_ADMIN_ID = '_SYSTEM_'
-DEFAULT_SUPER_ADMIN_HASH = b'$2b$12$0Gg2d744mB0Qf2fVzT3x5.YQpBq5pE6zV8qJ1zZ3O4t5u7/t.'
+# --- SYSTEM CONSTANTS (optional tracking) ---
+SYSTEM_ADMIN_ID = '_SYSTEM_'  # for internal audit tracking if used elsewhere
 
-
-# --- CUSTOM AUTHENTICATION & AUTHORIZATION ---
+# --- INITIAL SUPER ADMIN SETUP (optional bootstrap) ---
+DEFAULT_SUPER_ADMIN_PASSWORD = os.getenv("DEFAULT_SUPER_ADMIN_PASSWORD")
+DEFAULT_SUPER_ADMIN_HASH = (
+    bcrypt.hashpw(DEFAULT_SUPER_ADMIN_PASSWORD.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    if DEFAULT_SUPER_ADMIN_PASSWORD else None
+)
 
 def get_current_user():
     """Retrieves basic user info (role) from the session for simple access checks."""
