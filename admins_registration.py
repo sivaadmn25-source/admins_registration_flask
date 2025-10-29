@@ -5,13 +5,15 @@ from psycopg2 import OperationalError
 import uuid
 from datetime import datetime, timedelta
 import os 
-from dotenv import load_dotenv
-import bcrypt 
+from dotenv import load_dotenv 
 from functools import wraps
 from constants import house_type 
 import secrets 
 import pytz 
 from flask_mail import Mail, Message
+import sys
+sys.stdout.reconfigure(line_buffering=True)
+
 # -------------------------
 
 # Define your local timezone (assuming IST)
@@ -44,10 +46,10 @@ mail = Mail(app)
 # --- SYSTEM CONSTANTS (optional tracking) ---
 SYSTEM_ADMIN_ID = '_SYSTEM_'  # for internal audit tracking if used elsewhere
 
-# --- INITIAL SUPER ADMIN SETUP (modified for plain text) ---
+# --- INITIAL SUPER ADMIN SETUP (plain text password) ---
 DEFAULT_SUPER_ADMIN_PASSWORD = os.getenv("DEFAULT_SUPER_ADMIN_PASSWORD")
-# --- FIX A: Store plain text password, not a hash ---
-DEFAULT_SUPER_ADMIN_HASH = DEFAULT_SUPER_ADMIN_PASSWORD
+DEFAULT_SUPER_ADMIN_HASH = DEFAULT_SUPER_ADMIN_PASSWORD  # Stored as plain text
+
 # -------------------------------------------------------------
 
 def get_current_user():
@@ -63,11 +65,11 @@ def super_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if session.get('user_id') != SYSTEM_ADMIN_ID:
-            flash('Access denied: Super Admin credentials required.', 'error')
-            # Note: super_admin_login route is missing, using dashboard as fallback
+            flash('Access denied: Super Admin credentials required.', 'error') 
             return redirect(url_for('super_admin_dashboard')) 
         return f(*args, **kwargs)
     return decorated_function
+
 
 def admin_required(f):
     """Custom decorator to check if the user is authenticated."""
@@ -96,7 +98,8 @@ def get_db_conn():
     except OperationalError:
         raise ConnectionError("Could not connect to the database. Check DATABASE_URL in .env.")
 
-# --- Email Sending Functions (No change here, standard Flask-Mail) ---
+
+# --- Email Sending Functions ---
 def send_invite_email(recipient_email, society_name, invite_token, base_url):
     """Send the registration invitation email using Flask-Mail."""
     try:
@@ -127,15 +130,13 @@ The Election Management System Team
         mail.send(msg)
         return True
 
-    except Exception as e:
-        # Optional: log the exact error for debugging
+    except Exception as e: 
         print(f"❌ Email send failed: {e}")
         return False
 
+
 def send_final_approval_email(recipient_email, society_name):
-    """
-    Sends the final approval email after registration is successfully submitted.
-    """
+    """Sends the final approval email after registration is successfully submitted."""
     login_url = "https://example.com/system-entry"
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
     
@@ -158,13 +159,12 @@ SIVA Admin Team.
         msg = Message(subject=subject, recipients=[recipient_email], body=body)
         mail.send(msg)
         return True
-    except Exception as e:
+    except Exception:
         return False
 
+
 def send_rejection_email(recipient_email, society_name, reason=None):
-    """
-    Sends an email to the admin if the registration request is rejected.
-    """
+    """Sends an email to the admin if the registration request is rejected."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
     
     body = f"""
@@ -183,20 +183,18 @@ SIVA Admin Team.
         msg = Message(subject=subject, recipients=[recipient_email], body=body)
         mail.send(msg)
         return True
-    except Exception as e:
+    except Exception:
         return False
 
+
 def generate_invite_from_request(request_data, conn):
-    """Generates an invitation token, saves it to new_admins (as a placeholder invite), and updates request status."""
-    token = secrets.token_urlsafe(32)
-    # Set expiry 2 days from now, using the defined IST timezone
+    """Generates an invitation token, saves it to new_admins, and updates request status."""
+    token = secrets.token_urlsafe(32) 
     invite_end_at = datetime.now(IST) + timedelta(days=2) 
-    
-    # --- NO FIX: Hashing is preserved for new society admins ---
-    DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
-    
-    with conn.cursor() as cur:
-        # 1. Insert into new_admins (as placeholder invite)
+
+    DUMMY_PASS = 'dummy_pass'  # now stored as plain text
+
+    with conn.cursor() as cur: 
         cur.execute(
             """INSERT INTO new_admins (
                    society_name, role, mobile_number, email, password_hash, invite_token, 
@@ -204,25 +202,24 @@ def generate_invite_from_request(request_data, conn):
                ) 
                VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",
             (
-                f"INVITE_{request_data['society_name']}", # Using a prefix for society_name as a placeholder
+                f"INVITE_{request_data['society_name']}",
                 'admin', 
                 request_data['mobile_number'], 
                 request_data['email'], 
-                psycopg2.Binary(DUMMY_HASH), # Hashing preserved
+                DUMMY_PASS,  # plain text
                 token, 
                 invite_end_at,
-                1, # Min required value
+                1,
                 'Apartment-Single Tower', 
                 'new_invitation', 
                 False
             )
         )
-        # 2. Update registration_requests status to approved
+
         cur.execute("UPDATE registration_requests SET status = 'approved' WHERE id = %s", (request_data['id'],))
         
     return token
-
-# --- INITIAL SETUP HOOK ---
+# --- INITIAL SETUP HOOK --- 
 def ensure_super_admin_exists():
     """Checks and creates the initial System Admin record if the table is empty."""
     conn = None
@@ -248,7 +245,7 @@ def ensure_super_admin_exists():
                 SYSTEM_ADMIN_ID, 
                 'super_admin', 
                 # --- FIX B: Insert plain text password directly, assuming TEXT column ---
-                DEFAULT_SUPER_ADMIN_HASH, # Pass plain string
+                DEFAULT_SUPER_ADMIN_HASH,  # Pass plain string
                 # ------------------------------------------------------------------------
                 'system_placeholder@internal.com', 
                 '9999999999', 
@@ -263,11 +260,11 @@ def ensure_super_admin_exists():
     except OperationalError:
         return False
     except Exception as e:
-        if conn: conn.rollback()
-        # app.logger.error(f"Error in ensure_super_admin_exists: {e}")
+        if conn: conn.rollback() 
         return False
     finally:
         if conn: conn.close()
+
 
 @app.route('/super_admin/dashboard', methods=['GET', 'POST'])
 def super_admin_dashboard():
@@ -300,30 +297,18 @@ def super_admin_dashboard():
             if conn: conn.close()
 
         if user_record and password:
-            stored_hash = user_record['password_hash']
+            stored_password = user_record['password_hash']
 
             # --- DEBUG LOGGING ---
             print("\n🔍 DEBUG: Retrieved user_record =", dict(user_record))
-            print("🔍 DEBUG: Raw stored_hash type =", type(stored_hash))
-            print("🔍 DEBUG: Raw stored_hash value =", stored_hash)
+            print("🔍 DEBUG: Raw stored_password =", stored_password)
             print("🔍 DEBUG: Entered password =", password)
             # ----------------------
 
-            if isinstance(stored_hash, memoryview):
-                stored_hash = stored_hash.tobytes()
-                print("🔍 DEBUG: Converted from memoryview to bytes =", stored_hash)
-            elif isinstance(stored_hash, str):
-                stored_hash = stored_hash.encode('utf-8')
-                print("🔍 DEBUG: Converted from str to bytes =", stored_hash)
-
-            # --- Password check ---
-            try:
-                is_valid = bcrypt.checkpw(password.encode('utf-8'), stored_hash)
-                print("✅ DEBUG: bcrypt.checkpw result =", is_valid)
-            except Exception as e:
-                print("❌ DEBUG: bcrypt check failed with error:", e)
-                is_valid = False
-            # ----------------------
+            # --- Plain text password check (bcrypt removed) ---
+            is_valid = str(password).strip() == str(stored_password).strip()
+            print("✅ DEBUG: Plain password check result =", is_valid)
+            # --------------------------------------------------
 
             if is_valid:
                 session['user_id'] = SYSTEM_ADMIN_ID
@@ -350,7 +335,7 @@ def super_admin_dashboard():
             dummy_email = f"dummy_{uuid.uuid4().hex[:8]}@invite.com"
             invite_end_time = datetime.now(IST) + timedelta(days=2)
             DUMMY_MOBILE = '9999999999'
-            DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
+            DUMMY_PASS = 'dummy_pass'  # now plain text
             
             try:
                 conn = get_db_conn()
@@ -367,7 +352,7 @@ def super_admin_dashboard():
                     'admin', 
                     DUMMY_MOBILE, 
                     dummy_email, 
-                    psycopg2.Binary(DUMMY_HASH), 
+                    DUMMY_PASS,  # stored as plain text
                     token, 
                     invite_end_time,
                     2, 
@@ -401,7 +386,7 @@ def super_admin_dashboard():
             ) 
             pending_requests = cursor.fetchall()
             
-            # Fetch Pending Approvals (Existing Logic)
+            # Fetch Pending Approvals
             cursor.execute("""
                 SELECT 
                     society_name, email, mobile_number, max_voters, housing_type, is_towerwise, responded_at
@@ -415,7 +400,7 @@ def super_admin_dashboard():
             """)
             pending_approvals = cursor.fetchall()
             
-            # Fetch Active Invitations (Existing Logic)
+            # Fetch Active Invitations
             cursor.execute("""
                 SELECT 
                     society_name, invite_token, invited_at, invite_end_at, email
@@ -442,9 +427,7 @@ def super_admin_dashboard():
             app.logger.error(f"Dashboard Data Fetch Error: {e}")
         finally:
             if conn: conn.close()
-
-        # CRITICAL FIX: Base URL is now generated directly in the HTML using url_for
-        # Passing an empty string here to maintain the structure but rely on HTML fix
+ 
         base_url = "" 
 
         return render_template('super_admin_dashboard.html', 
@@ -459,6 +442,7 @@ def super_admin_dashboard():
     else:
         return render_template('super_admin_dashboard.html', is_authenticated=False)
  
+
 @app.route('/super_admin/erase_society', methods=['POST'])
 @super_admin_required
 def erase_society():
@@ -466,8 +450,7 @@ def erase_society():
     Handles executing the master erase deletion (POST).
     """
     conn = None
-    
-    # --- POST LOGIC: EXECUTE DELETION ---
+     
     society_name = request.form.get('society_name')
     if not society_name:
         flash("🚫 Error: Society name is missing for master erase.", 'error')
@@ -476,11 +459,9 @@ def erase_society():
     try:
         conn = get_db_conn()
         cursor = conn.cursor()
-        
-        # Start Transaction
+         
         conn.autocommit = False 
-
-        # Whitelist tables for safety
+ 
         simple_delete_tables = ['admins', 'households', 'new_admins', 'settings', 'registration_requests']
         conditional_delete_tables = {'votes': "is_archived = 0"}
         
@@ -492,13 +473,12 @@ def erase_society():
             cursor.execute(delete_query, (society_name,))
             deleted_count += cursor.rowcount
             
-        # 2. Execute conditional deletions (Votes table)
+        # 2. Execute conditional deletions
         for table, condition in conditional_delete_tables.items():
             delete_query = f"DELETE FROM {table} WHERE society_name = %s AND {condition};"
             cursor.execute(delete_query, (society_name,))
             deleted_count += cursor.rowcount
-        
-        # Final check and commit/rollback
+         
         total_tables_hit = len(simple_delete_tables) + len(conditional_delete_tables)
         if deleted_count == 0:
             flash(f"⚠️ Error: Society '{society_name}' found, but no non-archived data was deleted from {total_tables_hit} tables.", 'warning')
@@ -511,8 +491,7 @@ def erase_society():
         if conn: conn.rollback()
         flash(f"🚨 FATAL ERROR during master erase for '{society_name}': {e}", 'error')
 
-    finally:
-        # Correct cleanup: Reset autocommit to default BEFORE closing connection.
+    finally: 
         if conn: 
             conn.autocommit = True
             conn.close()
@@ -555,15 +534,14 @@ def approve_request(request_id):
         )
         conn.commit()
 
-        # --- SEND EMAIL WITH CLEAN NAME (FIXED URL) ---
-        # CRITICAL FIX: Generate the FULL dynamic link using url_for.
+        # --- SEND EMAIL WITH CLEAN NAME (FIXED URL) --- 
         registration_link = url_for('open_invite', token=invite_token, _external=True)
 
         email_sent = send_invite_email(
             request_data['email'],
             clean_society_name,
-            invite_token, # Keep this argument
-            registration_link # Pass the full, dynamic link as the final argument
+            invite_token,  # Keep this argument
+            registration_link  # Full, dynamic link
         )
 
         email_status = (
@@ -589,6 +567,7 @@ def approve_request(request_id):
             conn.close()
 
     return redirect(url_for('super_admin_dashboard'))
+
 
 @app.route('/reject_request/<int:request_id>', methods=['POST'])
 @admin_required 
@@ -625,8 +604,7 @@ def reject_request(request_id):
                 if request_data:
                     send_rejection_email(request_data['email'], request_data['society_name'])
 
-    except Exception as e:
-        # app.logger.error(f"Rejection error for request {request_id}: {e}")
+    except Exception as e: 
         if conn: conn.rollback()
         flash('An error occurred during rejection.', 'error')
         
@@ -634,6 +612,7 @@ def reject_request(request_id):
         if conn: conn.close()
     
     return redirect(url_for('super_admin_dashboard'))
+
 
 @app.route('/register_request', methods=['GET', 'POST'])
 def register_request():
@@ -682,8 +661,7 @@ def register_request():
             flash('✅ Your registration request has been submitted successfully for review! You will receive an invitation link soon.', 'success')
             return redirect(url_for('register_request'))
             
-        except (Exception, psycopg2.DatabaseError) as e:
-            # app.logger.error(f"Registration request submission error: {e}")
+        except (Exception, psycopg2.DatabaseError) as e: 
             if conn: conn.rollback()
             flash('An error occurred during submission. Please try again.', 'error')
             
@@ -692,6 +670,7 @@ def register_request():
     
     # For GET requests, render the registration page
     return render_template('register_request.html')
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def open_invite():
@@ -720,8 +699,9 @@ def open_invite():
                 flash("All fields are required.", "error")
                 return redirect(url_for('open_invite', token=token))
 
-            # --- NO FIX: Hashing is preserved for new society admins ---
-            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            # --- FIX: Store plain password instead of bcrypt hash ---
+            plain_password = password.strip()
+            # --------------------------------------------------------
 
             conn = get_db_conn()
             cursor = conn.cursor()
@@ -745,7 +725,7 @@ def open_invite():
                 AND 
                     review_status = 'new_invitation';
             """, (
-                society_name, email, mobile, psycopg2.Binary(hashed_password), # Hashing preserved
+                society_name, email, mobile, plain_password,  # plain password now
                 housing_type_selected, max_voters,
                 is_towerwise_flag, vote_per_house,
                 token
@@ -802,7 +782,7 @@ def open_invite():
             invite=invite,
             house_type=house_type
         )
-   
+    
 @app.route('/logout')
 def logout():
     """Handles user logout by clearing the session."""
