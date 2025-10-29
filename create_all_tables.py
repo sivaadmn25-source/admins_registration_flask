@@ -163,6 +163,25 @@ try:
         end_time TIMESTAMP WITH TIME ZONE,
         CONSTRAINT voting_schedule_pkey PRIMARY KEY (society_name)
     );''')
+
+    # --- INSERT DEFAULT ADMINS ---
+    default_passwords = {
+        "_SYSTEM_": ("SUPER_ADMIN", "secure_superadmin_password-f707", False, "xyz")
+    }
+
+    for society, (role, pwd, towerwise, housing_type) in default_passwords.items():
+        # Plain text password stored
+        cursor.execute('''
+            INSERT INTO admins (society_name, role, password_hash, max_voters)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (society_name, role) DO NOTHING;
+        ''', (society, role, pwd, 1))
+
+        cursor.execute('''
+            INSERT INTO settings (society_name, max_candidates_selection, max_voters, voted_count, is_towerwise, housing_type)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (society_name) DO NOTHING;
+        ''', (society, 1, 2, 0, towerwise, housing_type))
  
     conn.commit()
     print("✅ Database setup complete with all default societies and admins (plain text passwords).")
