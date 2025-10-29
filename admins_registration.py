@@ -300,16 +300,37 @@ def super_admin_dashboard():
             if conn: conn.close()
 
         if user_record and password:
-            stored_password = user_record['password_hash']  # Plain text from DB
+            stored_hash = user_record['password_hash']
 
-            # Compare trimmed strings (safe and simple for plain text storage)
-            if str(stored_password).strip() == password.strip():
+            # --- DEBUG LOGGING ---
+            print("\n🔍 DEBUG: Retrieved user_record =", dict(user_record))
+            print("🔍 DEBUG: Raw stored_hash type =", type(stored_hash))
+            print("🔍 DEBUG: Raw stored_hash value =", stored_hash)
+            print("🔍 DEBUG: Entered password =", password)
+            # ----------------------
+
+            if isinstance(stored_hash, memoryview):
+                stored_hash = stored_hash.tobytes()
+                print("🔍 DEBUG: Converted from memoryview to bytes =", stored_hash)
+            elif isinstance(stored_hash, str):
+                stored_hash = stored_hash.encode('utf-8')
+                print("🔍 DEBUG: Converted from str to bytes =", stored_hash)
+
+            # --- Password check ---
+            try:
+                is_valid = bcrypt.checkpw(password.encode('utf-8'), stored_hash)
+                print("✅ DEBUG: bcrypt.checkpw result =", is_valid)
+            except Exception as e:
+                print("❌ DEBUG: bcrypt check failed with error:", e)
+                is_valid = False
+            # ----------------------
+
+            if is_valid:
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('super_admin_dashboard'))
 
-        # If password check fails or user not found
         flash('Invalid Password.', 'error')
         return render_template('super_admin_dashboard.html', is_authenticated=False)
 
