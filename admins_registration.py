@@ -21,11 +21,7 @@ IST = pytz.timezone('Asia/Kolkata')
 load_dotenv()
 
 # --- DATABASE CONFIGURATION ---
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # --- FLASK APP SETUP ---
 app = Flask(__name__)
@@ -92,61 +88,55 @@ def admin_required(f):
 
 # --- Database Connection Function ---
 def get_db_conn():
-    """Establishes and returns a PostgreSQL database connection using environment variables."""
+    """Establish and return a PostgreSQL connection using DATABASE_URL (Render/Neon)."""
     try:
-        conn = psycopg2.connect(
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT
-        )
-        conn.autocommit = False 
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        conn.autocommit = False
         return conn
-    except OperationalError as e:
-        # Since app.logger is not available in all contexts, raising a custom error or printing is necessary
-        raise ConnectionError("Could not connect to the database. Check .env settings.")
+    except OperationalError:
+        raise ConnectionError("Could not connect to the database. Check DATABASE_URL in .env.")
 
 # --- Email Sending Functions (No change here, standard Flask-Mail) ---
 def send_invite_email(recipient_email, society_name, invite_token, base_url):
-    """Sends the registration invitation email using Flask-Mail."""
-    
-    registration_link = f"{base_url}{invite_token}"
-    
-    subject = f"Registration Invitation for {society_name}"
-    
-    body = f"""
-    Dear Admin of {society_name},
-
-    Your registration request has been approved!
-
-    Please use the link below to complete your society's registration and set up your Super Admin account:
-
-    Registration Link: {registration_link}
-
-    This link is valid for 14 days. If you have any issues, please contact system support.
-
-    Thank you,
-    The Election Management System Team
-    """
-    
-    msg = Message(
-        subject=subject,
-        recipients=[recipient_email],
-        body=body
-    )
-    
+    """Send the registration invitation email using Flask-Mail."""
     try:
-        mail.send(msg) 
+        registration_link = f"{base_url}"
+        subject = f"Registration Invitation for {society_name}"
+
+        body = f"""Dear Admin of {society_name},
+
+Your registration request has been approved!
+
+Please use the link below to complete your society's registration and set up your Super Admin account:
+
+{registration_link}
+
+This link is valid for 2 days. If you have any issues, please contact system support.
+
+Thank you,
+The Election Management System Team
+"""
+
+        msg = Message(
+            subject=subject,
+            recipients=[recipient_email],
+            body=body,
+            sender=app.config.get("MAIL_SENDER", "noreply@example.com")
+        )
+
+        mail.send(msg)
         return True
+
     except Exception as e:
-        # app.logger.error("Email send failed", exc_info=True)
+        # Optional: log the exact error for debugging
+        print(f"❌ Email send failed: {e}")
         return False
 
 def send_final_approval_email(recipient_email, society_name):
     """
     Sends the final approval email after registration is successfully submitted.
     """
+    login_url = "https://example.com/system-entry"
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
     
     body = f"""
@@ -156,7 +146,7 @@ We are pleased to inform you that your registration request for '{society_name}'
 
 You can now log in to the system using the credentials you created during submission.
 
-Log in URL: http://localhost/system-entry
+Log in URL: {login_url}
 
 If you have any questions, please feel free to contact us.
 
@@ -199,8 +189,8 @@ SIVA Admin Team.
 def generate_invite_from_request(request_data, conn):
     """Generates an invitation token, saves it to new_admins (as a placeholder invite), and updates request status."""
     token = secrets.token_urlsafe(32)
-    # Set expiry 14 days from now, using the defined IST timezone
-    invite_end_at = datetime.now(IST) + timedelta(days=14) 
+    # Set expiry 2 days from now, using the defined IST timezone
+    invite_end_at = datetime.now(IST) + timedelta(days=2) 
     
     # --- NO FIX: Hashing is preserved for new society admins ---
     DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
@@ -310,11 +300,9 @@ def super_admin_dashboard():
             if conn: conn.close()
 
         if user_record and password:
-            stored_password = user_record['password_hash'] # Get the stored plain password (TEXT column)
-            
-            # --- FIX C: Use plain text string comparison ---
-            if str(stored_password).strip() == password.strip():
-            # ------------------------------------------------
+            stored_hash = bytes(user_record['password_hash'])
+            if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
+                
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
@@ -332,17 +320,14 @@ def super_admin_dashboard():
         pending_requests = []
         societies = [] 
         
-        # Handle POST for Invitation Creation (Manual Dummy Invite)
+        # Handle POST for Invitation Creation (Existing Logic)
         if request.method == 'POST':
             token = secrets.token_urlsafe(32) 
             dummy_society_name = f"PLACEHOLDER_{uuid.uuid4().hex[:8]}" 
             dummy_email = f"dummy_{uuid.uuid4().hex[:8]}@invite.com"
-            invite_end_time = datetime.now(IST) + timedelta(days=14)
+            invite_end_time = datetime.now(IST) + timedelta(days=2)
             DUMMY_MOBILE = '9999999999'
-            
-            # --- FIX D: Use plain text dummy password ---
-            DUMMY_HASH = 'dummy_pass'
-            # ------------------------------------------
+            DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
             
             try:
                 conn = get_db_conn()
@@ -359,9 +344,7 @@ def super_admin_dashboard():
                     'admin', 
                     DUMMY_MOBILE, 
                     dummy_email, 
-                    # --- FIX D: Insert plain text string directly ---
-                    DUMMY_HASH, 
-                    # ------------------------------------------------
+                    psycopg2.Binary(DUMMY_HASH), 
                     token, 
                     invite_end_time,
                     2, 
@@ -378,7 +361,7 @@ def super_admin_dashboard():
                 flash(error_msg, 'error')
             finally:
                 if conn: conn.close()
-                
+        
             return redirect(url_for('super_admin_dashboard'))
                 
         # Handle GET (View Dashboard Data)
@@ -395,7 +378,7 @@ def super_admin_dashboard():
             ) 
             pending_requests = cursor.fetchall()
             
-            # Fetch Pending Approvals
+            # Fetch Pending Approvals (Existing Logic)
             cursor.execute("""
                 SELECT 
                     society_name, email, mobile_number, max_voters, housing_type, is_towerwise, responded_at
@@ -409,7 +392,7 @@ def super_admin_dashboard():
             """)
             pending_approvals = cursor.fetchall()
             
-            # Fetch Active Invitations
+            # Fetch Active Invitations (Existing Logic)
             cursor.execute("""
                 SELECT 
                     society_name, invite_token, invited_at, invite_end_at, email
@@ -422,7 +405,7 @@ def super_admin_dashboard():
                 ORDER BY invited_at DESC;
             """)
             active_invites = cursor.fetchall()
-
+        
             # Fetch societies for Master Erase dropdown
             cursor.execute(
                 """SELECT DISTINCT society_name FROM new_admins 
@@ -433,12 +416,13 @@ def super_admin_dashboard():
 
         except Exception as e:
             flash(f"Database Error retrieving dashboard data: {e}", 'error')
-            # app.logger.error(f"Dashboard Data Fetch Error: {e}")
+            app.logger.error(f"Dashboard Data Fetch Error: {e}")
         finally:
             if conn: conn.close()
 
-        current_host_port = request.host.split(':')[-1] if ':' in request.host else 5004
-        base_url = "https://admins-registration-flask.onrender.com/register?token="
+        # CRITICAL FIX: Base URL is now generated directly in the HTML using url_for
+        # Passing an empty string here to maintain the structure but rely on HTML fix
+        base_url = "" 
 
         return render_template('super_admin_dashboard.html', 
                                is_authenticated=True, 
@@ -451,7 +435,7 @@ def super_admin_dashboard():
     # --- STEP 3: HANDLE UNAUTHENTICATED GET REQUESTS ---
     else:
         return render_template('super_admin_dashboard.html', is_authenticated=False)
-
+ 
 @app.route('/super_admin/erase_society', methods=['POST'])
 @super_admin_required
 def erase_society():
@@ -474,7 +458,7 @@ def erase_society():
         conn.autocommit = False 
 
         # Whitelist tables for safety
-        simple_delete_tables = ['admins', 'households', 'new_admins', 'settings']
+        simple_delete_tables = ['admins', 'households', 'new_admins', 'settings', 'registration_requests']
         conditional_delete_tables = {'votes': "is_archived = 0"}
         
         deleted_count = 0
@@ -509,8 +493,8 @@ def erase_society():
         if conn: 
             conn.autocommit = True
             conn.close()
-    
-    return redirect(url_for('super_admin_dashboard'))
+
+        return redirect(url_for('super_admin_dashboard'))
     
 @app.route('/approve_request/<int:request_id>', methods=['POST'])
 @admin_required 
@@ -548,15 +532,15 @@ def approve_request(request_id):
         )
         conn.commit()
 
-        # --- SEND EMAIL WITH CLEAN NAME ---
-        current_host_port = request.host.split(':')[-1] if ':' in request.host else 5004
-        base_url = "https://admins-registration-flask.onrender.com/register?token="
+        # --- SEND EMAIL WITH CLEAN NAME (FIXED URL) ---
+        # CRITICAL FIX: Generate the FULL dynamic link using url_for.
+        registration_link = url_for('open_invite', token=invite_token, _external=True)
 
         email_sent = send_invite_email(
             request_data['email'],
-            clean_society_name, 
-            invite_token,
-            base_url
+            clean_society_name,
+            invite_token, # Keep this argument
+            registration_link # Pass the full, dynamic link as the final argument
         )
 
         email_status = (
@@ -572,7 +556,7 @@ def approve_request(request_id):
         )
 
     except Exception as e:
-        # app.logger.error(f"Approval error for request {request_id}: {e}")
+        app.logger.error(f"Approval error for request {request_id}: {e}")
         if conn:
             conn.rollback()
         flash('An error occurred during approval and invite generation. Please check server logs.', 'error')
