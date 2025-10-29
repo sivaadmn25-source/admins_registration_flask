@@ -110,7 +110,7 @@ def get_db_conn():
 def send_invite_email(recipient_email, society_name, invite_token, base_url):
     """Send the registration invitation email using Flask-Mail."""
     try:
-        registration_link = f"{base_url}"
+        registration_link = f"{base_url}/register/{invite_token}"
         subject = f"Registration Invitation for {society_name}"
 
         body = f"""Dear Admin of {society_name},
@@ -281,12 +281,11 @@ def super_admin_dashboard():
     """
     Handles System Admin Login (POST) and displays the Dashboard (GET, authenticated).
     Renders the login form when unauthenticated (GET).
-    """
-    ensure_super_admin_exists()
-    session['user_id'] = SYSTEM_ADMIN_ID
+    """ 
     user = get_current_user()
     is_authenticated = user is not None
-        
+    ensure_super_admin_exists()
+    session['user_id'] = SYSTEM_ADMIN_ID
     
     # --- STEP 1: HANDLE LOGIN POST REQUEST ---
     if request.method == 'POST' and not is_authenticated:
