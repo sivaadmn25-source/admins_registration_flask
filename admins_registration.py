@@ -312,22 +312,20 @@ def super_admin_dashboard():
             if conn:
                 conn.close()
 
-        if user_record and password:
-            # ✅ Correct way to read BYTEA data as bytes
-            stored_hash = user_record['password_hash']
+            if user_record and password:
+                        stored_hash = str(user_record['password_hash'])
 
+                        # Compare the clean string from the DB to the plain text password from the form
+                        if stored_hash == password:
+                            session['user_id'] = SYSTEM_ADMIN_ID
+                            flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
+                            next_page = request.args.get('next')
+                            return redirect(next_page or url_for('super_admin_dashboard'))
 
-            # ✅ Verify password correctly
-            if stored_hash == password:
-                session['user_id'] = SYSTEM_ADMIN_ID
-                flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
-                next_page = request.args.get('next')
-                return redirect(next_page or url_for('super_admin_dashboard'))
+            flash('Invalid Password.', 'error')
+            return render_template('super_admin_dashboard.html', is_authenticated=False)
 
-        flash('Invalid Password.', 'error')
-        return render_template('super_admin_dashboard.html', is_authenticated=False)
-
-    # --- STEP 2: HANDLE AUTHENTICATED REQUESTS (GET or POST for invite creation) ---
+  # --- STEP 2: HANDLE AUTHENTICATED REQUESTS (GET or POST for invite creation) ---
     if is_authenticated:
 
         conn = None
