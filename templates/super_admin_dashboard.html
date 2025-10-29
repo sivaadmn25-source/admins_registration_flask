@@ -494,7 +494,12 @@
         }
     });
 });
-
+        document.addEventListener('DOMContentLoaded', function() {
+            $('[data-toggle="tooltip"]').tooltip();
+            const houseTypeSelect = document.getElementById('house_type');
+            updateTowerwiseState(); 
+            houseTypeSelect.addEventListener('change', updateTowerwiseState);
+        });
     </script>
     <footer class="fixed-bottom text-center text-muted" style="font-size: 1rem; padding: 10px; background-color: #f4f7f6; z-index: 1000;">
         D3 by: 

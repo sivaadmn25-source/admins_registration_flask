@@ -217,7 +217,7 @@ def generate_invite_from_request(request_data, conn):
                 'admin', 
                 request_data['mobile_number'], 
                 request_data['email'], 
-                psycopg2.Binary(DUMMY_HASH), # Hashing preserved
+                DUMMY_HASH, # Hashing preserved
                 token, 
                 invite_end_at,
                 1, # Min required value
@@ -282,10 +282,11 @@ def super_admin_dashboard():
     Handles System Admin Login (POST) and displays the Dashboard (GET, authenticated).
     Renders the login form when unauthenticated (GET).
     """
+    ensure_super_admin_exists()
     session['user_id'] = SYSTEM_ADMIN_ID
     user = get_current_user()
     is_authenticated = user is not None
-    ensure_super_admin_exists()
+        
     
     # --- STEP 1: HANDLE LOGIN POST REQUEST ---
     if request.method == 'POST' and not is_authenticated:
@@ -733,7 +734,7 @@ def open_invite():
                 AND 
                     review_status = 'new_invitation';
             """, (
-                society_name, email, mobile, psycopg2.Binary(hashed_password), # Hashing preserved
+                society_name, email, mobile, hashed_password, # Hashing preserved
                 housing_type_selected, max_voters,
                 is_towerwise_flag, vote_per_house,
                 token
