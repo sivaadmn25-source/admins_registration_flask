@@ -37,200 +37,193 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 app.config.update(
     MAIL_SERVER=os.getenv('MAIL_SERVER'),
     MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
-    MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', '1'],
+    MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1'],
     MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
     MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
-    MAIL_DEFAULT_SENDER=os.getenv('MAIL_USERNAME')
+    MAIL_DEFAULT_SENDER=os.getenv('MAIL_SENDER', os.getenv('MAIL_USERNAME'))
 )
+
 mail = Mail(app)
 
-# --- SYSTEM CONSTANTS ---
-SYSTEM_ADMIN_ID = 'SYSTEM_ADMIN'
-# Removed: DEFAULT_SUPER_ADMIN_PASSWORD = os.getenv("DEFAULT_SUPER_ADMIN_PASSWORD")
-# Removed: DEFAULT_SUPER_ADMIN_HASH = ...
+# --- SYSTEM CONSTANTS (optional tracking) ---
+SYSTEM_ADMIN_ID = '_SYSTEM_'  # for internal audit tracking if used elsewhere
 
-# --- DATABASE CONNECTION ---
-def get_db_conn():
-    """Establishes a connection to the PostgreSQL database."""
-    try:
-        conn = psycopg2.connect(
-            dbname=DB_NAME, 
-            user=DB_USER, 
-            password=DB_PASSWORD, 
-            host=DB_HOST, 
-            port=DB_PORT
-        )
-        return conn
-    except OperationalError as e:
-        print(f"Database connection failed: {e}")
-        flash("Database connection failed. Please check server status.", "error")
-        return None
+# --- INITIAL SUPER ADMIN SETUP (modified for plain text) ---
+DEFAULT_SUPER_ADMIN_PASSWORD = os.getenv("DEFAULT_SUPER_ADMIN_PASSWORD")
+# --- FIX A: Store plain text password, not a hash ---
+DEFAULT_SUPER_ADMIN_HASH = DEFAULT_SUPER_ADMIN_PASSWORD
+# -------------------------------------------------------------
 
-# --- AUTH DECORATOR ---
-def login_required(f):
-    """Decorator to ensure user is logged in."""
+def get_current_user():
+    """Retrieves basic user info (role) from the session for simple access checks."""
+    user_id = session.get('user_id')
+    if user_id == SYSTEM_ADMIN_ID:
+        return {'id': SYSTEM_ADMIN_ID, 'role': 'SUPER_ADMIN'}
+    return None
+
+
+def super_admin_required(f):
+    """Decorator to check if the current user is logged in as the Super Admin."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please log in to access this page.', 'error')
-            return redirect(url_for('super_admin_dashboard', next=request.url))
+        if session.get('user_id') != SYSTEM_ADMIN_ID:
+            flash('Access denied: Super Admin credentials required.', 'error')
+            # Note: super_admin_login route is missing, using dashboard as fallback
+            return redirect(url_for('super_admin_dashboard')) 
         return f(*args, **kwargs)
     return decorated_function
 
-# --- EMAIL FUNCTIONS ---
-def send_email(to, subject, body):
-    """Sends an email using Flask-Mail."""
+def admin_required(f):
+    """Custom decorator to check if the user is authenticated."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if user is None:
+            flash('Please log in to access this page.', 'info')
+            return redirect(url_for('super_admin_dashboard', next=request.url))
+        
+        if user['role'] != 'SUPER_ADMIN':
+            flash("🚫 Access denied.", 'error')
+            return redirect(url_for('logout')) 
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# --- Database Connection Function ---
+def get_db_conn():
+    """Establishes and returns a PostgreSQL database connection using environment variables."""
     try:
-        msg = Message(subject, recipients=[to], body=body)
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        conn.autocommit = False 
+        return conn
+    except OperationalError as e:
+        # Since app.logger is not available in all contexts, raising a custom error or printing is necessary
+        raise ConnectionError("Could not connect to the database. Check .env settings.")
+
+# --- Email Sending Functions (No change here, standard Flask-Mail) ---
+def send_invite_email(recipient_email, society_name, invite_token, base_url):
+    """Sends the registration invitation email using Flask-Mail."""
+    
+    registration_link = f"{base_url}{invite_token}"
+    
+    subject = f"Registration Invitation for {society_name}"
+    
+    body = f"""
+    Dear Admin of {society_name},
+
+    Your registration request has been approved!
+
+    Please use the link below to complete your society's registration and set up your Super Admin account:
+
+    Registration Link: {registration_link}
+
+    This link is valid for 14 days. If you have any issues, please contact system support.
+
+    Thank you,
+    The Election Management System Team
+    """
+    
+    msg = Message(
+        subject=subject,
+        recipients=[recipient_email],
+        body=body
+    )
+    
+    try:
+        mail.send(msg) 
+        return True
+    except Exception as e:
+        # app.logger.error("Email send failed", exc_info=True)
+        return False
+
+def send_final_approval_email(recipient_email, society_name):
+    """
+    Sends the final approval email after registration is successfully submitted.
+    """
+    subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
+    
+    body = f"""
+Dear Admin of {society_name},
+
+We are pleased to inform you that your registration request for '{society_name}' has been officially approved.
+
+You can now log in to the system using the credentials you created during submission.
+
+Log in URL: http://localhost/system-entry
+
+If you have any questions, please feel free to contact us.
+
+Sincerely,
+SIVA Admin Team.
+"""
+
+    try:
+        msg = Message(subject=subject, recipients=[recipient_email], body=body)
         mail.send(msg)
         return True
     except Exception as e:
-        print(f"Email sending failed to {to}: {e}")
         return False
 
-def send_approval_email(to, society_name, invite_token):
-    """Sends the invitation email with the unique registration link."""
-    subject = "Your Society Registration Invitation"
-    registration_link = url_for('open_invite', token=invite_token, _external=True)
+def send_rejection_email(recipient_email, society_name, reason=None):
+    """
+    Sends an email to the admin if the registration request is rejected.
+    """
+    subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
+    
     body = f"""
 Dear Admin of {society_name},
 
-Your society's registration request has been approved and an invitation is ready for you!
+We regret to inform you that your registration request for '{society_name}' has been rejected.
 
-Please click the link below to complete your registration and set your password:
-{registration_link}
+{f"Reason: {reason}" if reason else ""}
 
-This link will expire in 14 days.
+If you have any questions or believe this was a mistake, please contact the system support team.
 
-If you have any questions, please contact the system administrator.
-
-Regards,
-System Admin Team
+Sincerely,
+SIVA Admin Team.
 """
-    return send_email(to, subject, body)
-
-def send_final_approval_email(to, society_name):
-    """Sends confirmation after the admin submits their details."""
-    subject = "Society Details Submitted"
-    body = f"""
-Dear Admin of {society_name},
-
-Thank you for submitting your final registration details. 
-Your application is now under final review by the Super Admin. You will receive another notification once it's fully approved and ready for use.
-
-Regards,
-System Admin Team
-"""
-    return send_email(to, subject, body)
-
-# --- DATABASE SETUP ---
-def ensure_tables_exist():
-    """
-    Checks if necessary tables exist and creates them if not. 
-    Also ensures the Super Admin account exists.
-    """
-    conn = get_db_conn()
-    if not conn:
-        return False
-        
     try:
-        cursor = conn.cursor()
-        
-        # 1. Create registration_requests table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS registration_requests (
-                id SERIAL PRIMARY KEY,
-                society_name TEXT NOT NULL UNIQUE,
-                email TEXT NOT NULL UNIQUE,
-                mobile_number VARCHAR(15) NOT NULL,
-                request_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                status VARCHAR(50) DEFAULT 'pending'
-            );
-        """)
-
-        # 2. Create new_admins table (for pending invitees)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS new_admins (
-                id SERIAL PRIMARY KEY,
-                society_name TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'admin',
-                mobile_number VARCHAR(15) NOT NULL,
-                email TEXT UNIQUE,
-                password_hash TEXT NOT NULL, -- <--- SET TO TEXT
-                max_voters INTEGER NOT NULL DEFAULT 2,
-                housing_type TEXT NOT NULL DEFAULT 'xyz',
-                reset_token CHARACTER VARYING,
-                reset_token_expiry TIMESTAMP WITH TIME ZONE,
-                invite_token CHARACTER VARYING UNIQUE,
-                invite_end_at TIMESTAMP WITH TIME ZONE,
-                review_status VARCHAR(50) DEFAULT 'new_invitation',
-                responded BOOLEAN DEFAULT FALSE,
-                responded_at TIMESTAMP WITH TIME ZONE,
-                is_towerwise BOOLEAN DEFAULT FALSE,
-                vote_per_house BOOLEAN NOT NULL DEFAULT FALSE
-            );
-        """)
-
-        # 3. Create admins table (for active accounts)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS admins (
-                id SERIAL PRIMARY KEY,
-                society_name TEXT NOT NULL UNIQUE,
-                role TEXT NOT NULL,
-                password_hash TEXT NOT NULL, -- <--- SET TO TEXT
-                max_voters INTEGER NOT NULL DEFAULT 2,
-                housing_type TEXT NOT NULL DEFAULT 'xyz',
-                reset_token CHARACTER VARYING,
-                reset_token_expiry TIMESTAMP WITH TIME ZONE,
-                email CHARACTER VARYING UNIQUE,
-                mobile_number VARCHAR(15),
-                is_towerwise BOOLEAN DEFAULT FALSE,
-                vote_per_house BOOLEAN NOT NULL DEFAULT FALSE,
-                CONSTRAINT unique_society_role UNIQUE (society_name, role)
-            );
-        """)
-
-        # 4. Check/Insert Super Admin (REMOVED LOGIC)
-        # The Super Admin must be inserted manually into the `admins` table for first-time use.
-        
-        conn.commit()
+        msg = Message(subject=subject, recipients=[recipient_email], body=body)
+        mail.send(msg)
         return True
-        
     except Exception as e:
-        print(f"Error during table setup: {e}")
-        if conn: conn.rollback()
         return False
-    finally:
-        if conn: conn.close()
 
 def generate_invite_from_request(request_data, conn):
     """Generates an invitation token, saves it to new_admins (as a placeholder invite), and updates request status."""
     token = secrets.token_urlsafe(32)
     # Set expiry 14 days from now, using the defined IST timezone
     invite_end_at = datetime.now(IST) + timedelta(days=14) 
-    # Use dummy values required by new_admins table schema
-    DUMMY_PASSWORD = 'dummy_pass' # <--- USE PLAIN TEXT PASSWORD
+    
+    # --- NO FIX: Hashing is preserved for new society admins ---
+    DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
     
     with conn.cursor() as cur:
         # 1. Insert into new_admins (as placeholder invite)
         cur.execute(
             """INSERT INTO new_admins (
                    society_name, role, mobile_number, email, password_hash, invite_token, 
-                   invite_end_at, max_voters, housing_type, review_status, is_towerwise, vote_per_house
+                   invite_end_at, max_voters, housing_type, review_status, is_towerwise
                ) 
-               VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",
+               VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",
             (
                 f"INVITE_{request_data['society_name']}", # Using a prefix for society_name as a placeholder
                 'admin', 
                 request_data['mobile_number'], 
                 request_data['email'], 
-                DUMMY_PASSWORD, # <--- PASS PLAIN TEXT DIRECTLY
+                psycopg2.Binary(DUMMY_HASH), # Hashing preserved
                 token, 
                 invite_end_at,
                 1, # Min required value
                 'Apartment-Single Tower', 
                 'new_invitation', 
-                False,
                 False
             )
         )
@@ -239,239 +232,468 @@ def generate_invite_from_request(request_data, conn):
         
     return token
 
-# --- ROUTES ---
+# --- INITIAL SETUP HOOK ---
+def ensure_super_admin_exists():
+    """Checks and creates the initial System Admin record if the table is empty."""
+    conn = None
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        cursor.execute("SELECT * FROM admins WHERE society_name = %s;", (SYSTEM_ADMIN_ID,))
+        super_admin_record = cursor.fetchone()
 
-@app.before_request
-def check_for_tables():
-    """Runs database setup before the very first request."""
-    if not hasattr(app, 'tables_initialized'):
-        if ensure_tables_exist():
-            app.tables_initialized = True
-        else:
-            # Handle error case where tables couldn't be created
-            flash("CRITICAL: Database tables could not be initialized.", "error")
+        if super_admin_record:
+            return True
+
+        cursor.execute("SELECT COUNT(*) FROM admins;")
+        count = cursor.fetchone()[0]
+
+        if count == 0:            
+            cursor.execute("""
+                INSERT INTO admins (
+                    society_name, role, password_hash, email, mobile_number, max_voters, housing_type 
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """, (
+                SYSTEM_ADMIN_ID, 
+                'super_admin', 
+                # --- FIX B: Insert plain text password directly, assuming TEXT column ---
+                DEFAULT_SUPER_ADMIN_HASH, # Pass plain string
+                # ------------------------------------------------------------------------
+                'system_placeholder@internal.com', 
+                '9999999999', 
+                1, 
+                'Apartment-Single Tower'
+            ))
+            conn.commit()
+            return True
+        
+        return True 
+
+    except OperationalError:
+        return False
+    except Exception as e:
+        if conn: conn.rollback()
+        # app.logger.error(f"Error in ensure_super_admin_exists: {e}")
+        return False
+    finally:
+        if conn: conn.close()
 
 @app.route('/super_admin/dashboard', methods=['GET', 'POST'])
 def super_admin_dashboard():
-    conn = get_db_conn()
-    if not conn:
-        # If DB connection fails, only show login page (cannot check status)
+    """
+    Handles System Admin Login (POST) and displays the Dashboard (GET, authenticated).
+    Renders the login form when unauthenticated (GET).
+    """
+    ensure_super_admin_exists()
+    user = get_current_user()
+    is_authenticated = user is not None
+    
+    # --- STEP 1: HANDLE LOGIN POST REQUEST ---
+    if request.method == 'POST' and not is_authenticated:
+        password = request.form.get('password')
+        
+        conn = None
+        user_record = None
+        
+        try:
+            conn = get_db_conn()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+            cursor.execute("SELECT society_name, password_hash, role FROM admins WHERE society_name = %s;", (SYSTEM_ADMIN_ID,))
+            user_record = cursor.fetchone()
+
+        except Exception as e:
+            flash(f'Database error during login: {e}', 'error')
+            return render_template('super_admin_dashboard.html', is_authenticated=False)
+        finally:
+            if conn: conn.close()
+
+        if user_record and password:
+            stored_password = user_record['password_hash'] # Get the stored plain password (TEXT column)
+            
+            # --- FIX C: Use plain text string comparison ---
+            if str(stored_password).strip() == password.strip():
+            # ------------------------------------------------
+                session['user_id'] = SYSTEM_ADMIN_ID
+                flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('super_admin_dashboard'))
+        
+        flash('Invalid Password.', 'error')
         return render_template('super_admin_dashboard.html', is_authenticated=False)
 
-    try:
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # --- STEP 2: HANDLE AUTHENTICATED REQUESTS (GET or POST for invite creation) ---
+    if is_authenticated:
         
-        # --- HANDLE LOGIN (POST) ---
+        conn = None
+        pending_approvals = [] 
+        active_invites = []    
+        pending_requests = []
+        societies = [] 
+        
+        # Handle POST for Invitation Creation (Manual Dummy Invite)
         if request.method == 'POST':
-            # 1. Handle Login
-            if 'email' in request.form and 'password' in request.form:
-                email = request.form['email']
-                password = request.form['password']
-                
-                cursor.execute("SELECT password_hash, role FROM admins WHERE email = %s", (email,))
-                user_record = cursor.fetchone()
-                
-                if user_record and password:
-                    stored_password = user_record['password_hash']
-                    
-                    # Use direct string comparison for plain text password
-                    if password == stored_password: 
-                        
-                        session['user_id'] = SYSTEM_ADMIN_ID
-                        flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
-                        next_page = request.args.get('next')
-                        return redirect(next_page or url_for('super_admin_dashboard'))
-                
-                flash('Invalid Credentials (Email or Password).', 'error')
-                return render_template('super_admin_dashboard.html', is_authenticated=False)
-
-            # 2. Handle Invitation Creation (Manual)
             token = secrets.token_urlsafe(32) 
             dummy_society_name = f"PLACEHOLDER_{uuid.uuid4().hex[:8]}" 
             dummy_email = f"dummy_{uuid.uuid4().hex[:8]}@invite.com"
             invite_end_time = datetime.now(IST) + timedelta(days=14)
             DUMMY_MOBILE = '9999999999'
-            DUMMY_PASSWORD = 'dummy_pass' # <--- USE PLAIN TEXT PASSWORD
+            
+            # --- FIX D: Use plain text dummy password ---
+            DUMMY_HASH = 'dummy_pass'
+            # ------------------------------------------
             
             try:
-                # Check authentication again before manual action
-                if 'user_id' not in session:
-                    flash('Authentication required for this action.', 'error')
-                    return redirect(url_for('super_admin_dashboard'))
-                    
+                conn = get_db_conn()
+                cursor = conn.cursor()
+                
                 cursor.execute("""
                     INSERT INTO new_admins (
                         society_name, role, mobile_number, email, password_hash, invite_token, 
-                        invite_end_at, max_voters, housing_type, review_status, is_towerwise, vote_per_house
+                        invite_end_at, max_voters, housing_type, review_status, is_towerwise
                     ) 
-                    VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """, (
                     dummy_society_name, 
                     'admin', 
                     DUMMY_MOBILE, 
                     dummy_email, 
-                    DUMMY_PASSWORD, # <--- PASS PLAIN TEXT DIRECTLY
+                    # --- FIX D: Insert plain text string directly ---
+                    DUMMY_HASH, 
+                    # ------------------------------------------------
                     token, 
                     invite_end_time,
                     2, 
                     'xyz', 
                     'new_invitation', 
-                    False, 
-                    False
+                    False 
                 ))
                 conn.commit()
                 flash(f"✅ New invitation created. Token: {token[:8]}... Link generated.", 'success')
                 
             except Exception as e:
-                conn.rollback()
+                if conn: conn.rollback()
                 error_msg = f"DB INSERT FAILED: Check constraints/columns. Error: {e}"
                 flash(error_msg, 'error')
-
-            # Must redirect to GET after a POST
+            finally:
+                if conn: conn.close()
+                
             return redirect(url_for('super_admin_dashboard'))
-
-
-        # --- HANDLE GET (DISPLAY) ---
-        if 'user_id' in session:
-            # User is logged in (Super Admin view)
+                
+        # Handle GET (View Dashboard Data)
+        try:
+            conn = get_db_conn()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
             
-            # Fetch pending requests
-            cursor.execute("SELECT * FROM registration_requests WHERE status = 'pending' ORDER BY request_date DESC")
+            # Fetch Pending Registration Requests
+            cursor.execute(
+                """SELECT id, society_name, email, mobile_number, submitted_at
+                   FROM registration_requests 
+                   WHERE status = 'pending' 
+                   ORDER BY submitted_at ASC"""
+            ) 
             pending_requests = cursor.fetchall()
             
-            # Fetch pending review submissions
-            cursor.execute("SELECT * FROM new_admins WHERE review_status = 'submitted_for_review' ORDER BY responded_at DESC")
-            pending_review_submissions = cursor.fetchall()
+            # Fetch Pending Approvals
+            cursor.execute("""
+                SELECT 
+                    society_name, email, mobile_number, max_voters, housing_type, is_towerwise, responded_at
+                FROM 
+                    new_admins 
+                WHERE 
+                    review_status = 'submitted_for_review' 
+                AND 
+                    responded = TRUE
+                ORDER BY responded_at DESC;
+            """)
+            pending_approvals = cursor.fetchall()
+            
+            # Fetch Active Invitations
+            cursor.execute("""
+                SELECT 
+                    society_name, invite_token, invited_at, invite_end_at, email
+                FROM 
+                    new_admins 
+                WHERE 
+                    responded = FALSE 
+                AND 
+                    review_status = 'new_invitation' 
+                ORDER BY invited_at DESC;
+            """)
+            active_invites = cursor.fetchall()
 
-            return render_template(
-                'super_admin_dashboard.html', 
-                is_authenticated=True, 
-                pending_requests=pending_requests,
-                pending_review_submissions=pending_review_submissions
+            # Fetch societies for Master Erase dropdown
+            cursor.execute(
+                """SELECT DISTINCT society_name FROM new_admins 
+                   WHERE role = 'admin' 
+                   ORDER BY society_name;"""
             )
-        else:
-            # User is not logged in (Login page view)
-            return render_template('super_admin_dashboard.html', is_authenticated=False)
+            societies = [row[0] for row in cursor.fetchall()]
 
-    except Exception as e:
-        flash(f"An unexpected error occurred: {e}", 'error')
-        # On error, log out the user and show login page
-        session.pop('user_id', None)
+        except Exception as e:
+            flash(f"Database Error retrieving dashboard data: {e}", 'error')
+            # app.logger.error(f"Dashboard Data Fetch Error: {e}")
+        finally:
+            if conn: conn.close()
+
+        current_host_port = request.host.split(':')[-1] if ':' in request.host else 5004
+        base_url = "https://admins-registration-flask.onrender.com/register?token="
+
+        return render_template('super_admin_dashboard.html', 
+                               is_authenticated=True, 
+                               pending_approvals=pending_approvals, 
+                               active_invites=active_invites,
+                               pending_requests=pending_requests,
+                               societies=societies, 
+                               base_url=base_url)
+
+    # --- STEP 3: HANDLE UNAUTHENTICATED GET REQUESTS ---
+    else:
         return render_template('super_admin_dashboard.html', is_authenticated=False)
-    finally:
-        if conn: conn.close()
 
-
-@app.route('/super_admin/logout')
-def super_admin_logout():
-    """Logs out the Super Admin."""
-    session.pop('user_id', None)
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('super_admin_dashboard'))
-
-@app.route('/super_admin/send_invite/<int:request_id>', methods=['POST'])
-@login_required
-def send_invite(request_id):
-    """Generates an invite token and sends the registration link to the requested admin."""
-    conn = get_db_conn()
-    if not conn:
+@app.route('/super_admin/erase_society', methods=['POST'])
+@super_admin_required
+def erase_society():
+    """
+    Handles executing the master erase deletion (POST).
+    """
+    conn = None
+    
+    # --- POST LOGIC: EXECUTE DELETION ---
+    society_name = request.form.get('society_name')
+    if not society_name:
+        flash("🚫 Error: Society name is missing for master erase.", 'error')
         return redirect(url_for('super_admin_dashboard'))
-        
+
     try:
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
-        # 1. Fetch request details
-        cursor.execute("SELECT * FROM registration_requests WHERE id = %s AND status = 'pending'", (request_id,))
-        request_data = cursor.fetchone()
-        
-        if not request_data:
-            flash("⚠️ Error: Registration request not found or already processed.", 'warning')
-            return redirect(url_for('super_admin_dashboard'))
-
-        # 2. Generate invite and update DB status
-        invite_token = generate_invite_from_request(request_data, conn)
-        
-        # 3. Send email with the invite link
-        if send_approval_email(request_data['email'], request_data['society_name'], invite_token):
-            conn.commit()
-            flash(f"✉️ Invitation sent to {request_data['society_name']} ({request_data['email']}). Status updated.", 'success')
-        else:
-            conn.rollback() # Rollback DB changes if email fails
-            flash("❌ Invitation email failed to send. DB changes were rolled back.", 'error')
-        
-    except Exception as e:
-        if conn: conn.rollback()
-        flash(f"An unexpected error occurred during invite: {e}", 'error')
-
-    finally:
-        if conn: conn.close()
-        
-    return redirect(url_for('super_admin_dashboard'))
-
-@app.route('/super_admin/reject_request/<int:request_id>', methods=['POST'])
-@login_required
-def reject_request(request_id):
-    """Rejects a registration request."""
-    conn = get_db_conn()
-    if not conn:
-        return redirect(url_for('super_admin_dashboard'))
-        
-    try:
+        conn = get_db_conn()
         cursor = conn.cursor()
         
-        cursor.execute("UPDATE registration_requests SET status = 'rejected' WHERE id = %s AND status = 'pending'", (request_id,))
+        # Start Transaction
+        conn.autocommit = False 
 
-        if cursor.rowcount == 0:
-            flash("⚠️ Error: Request not found or was not pending.", 'warning')
+        # Whitelist tables for safety
+        simple_delete_tables = ['admins', 'households', 'new_admins', 'settings']
+        conditional_delete_tables = {'votes': "is_archived = 0"}
+        
+        deleted_count = 0
+        
+        # 1. Execute simple deletions
+        for table in simple_delete_tables:
+            delete_query = f"DELETE FROM {table} WHERE society_name = %s;"
+            cursor.execute(delete_query, (society_name,))
+            deleted_count += cursor.rowcount
+            
+        # 2. Execute conditional deletions (Votes table)
+        for table, condition in conditional_delete_tables.items():
+            delete_query = f"DELETE FROM {table} WHERE society_name = %s AND {condition};"
+            cursor.execute(delete_query, (society_name,))
+            deleted_count += cursor.rowcount
+        
+        # Final check and commit/rollback
+        total_tables_hit = len(simple_delete_tables) + len(conditional_delete_tables)
+        if deleted_count == 0:
+            flash(f"⚠️ Error: Society '{society_name}' found, but no non-archived data was deleted from {total_tables_hit} tables.", 'warning')
             conn.rollback()
         else:
-            conn.commit() 
-            flash(f"🚫 Request {request_id} successfully **rejected**. Status updated.", 'info')
-
+            conn.commit()
+            flash(f"🔥 MASTER ERASE COMPLETE: **{deleted_count} records** for society **{society_name}** permanently deleted.", 'success')
+            
     except Exception as e:
         if conn: conn.rollback()
-        flash(f"An unexpected error occurred during rejection: {e}", 'error')
+        flash(f"🚨 FATAL ERROR during master erase for '{society_name}': {e}", 'error')
 
+    finally:
+        # Correct cleanup: Reset autocommit to default BEFORE closing connection.
+        if conn: 
+            conn.autocommit = True
+            conn.close()
+    
+    return redirect(url_for('super_admin_dashboard'))
+    
+@app.route('/approve_request/<int:request_id>', methods=['POST'])
+@admin_required 
+def approve_request(request_id):
+    conn = None
+    try:
+        conn = get_db_conn()
+        if not conn:
+            flash('Database connection error.', 'error')
+            return redirect(url_for('super_admin_dashboard'))
+
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            # Retrieve pending request
+            cur.execute(
+                """
+                SELECT id, society_name, email, mobile_number
+                FROM registration_requests
+                WHERE id = %s AND status = 'pending'
+                """,
+                (request_id,)
+            )
+            request_data = cur.fetchone()
+
+        if not request_data:
+            flash("Request not found or already processed.", 'error')
+            return redirect(url_for('super_admin_dashboard'))
+
+        # --- TRIM INVITE_ PREFIX FROM SOCIETY NAME ---
+        society_name_with_prefix = request_data['society_name']
+        clean_society_name = request_data['society_name'].removeprefix('INVITE_')
+        # --- GENERATE INVITE TOKEN USING CLEAN NAME ---
+        invite_token = generate_invite_from_request(
+            {**dict(request_data), 'society_name': clean_society_name},
+            conn
+        )
+        conn.commit()
+
+        # --- SEND EMAIL WITH CLEAN NAME ---
+        current_host_port = request.host.split(':')[-1] if ':' in request.host else 5004
+        base_url = "https://admins-registration-flask.onrender.com/register?token="
+
+        email_sent = send_invite_email(
+            request_data['email'],
+            clean_society_name, 
+            invite_token,
+            base_url
+        )
+
+        email_status = (
+            "and **Email Sent** 📧" if email_sent
+            else "but **Email Failed** ❌ (Check server logs)"
+        )
+
+        # --- FLASH MESSAGE ---
+        flash(
+            f"✅ Approved request for **{clean_society_name}**. "
+            f"Invite Token: **{invite_token}** generated {email_status}.",
+            'success'
+        )
+
+    except Exception as e:
+        # app.logger.error(f"Approval error for request {request_id}: {e}")
+        if conn:
+            conn.rollback()
+        flash('An error occurred during approval and invite generation. Please check server logs.', 'error')
+
+    finally:
+        if conn:
+            conn.close()
+
+    return redirect(url_for('super_admin_dashboard'))
+
+@app.route('/reject_request/<int:request_id>', methods=['POST'])
+@admin_required 
+def reject_request(request_id):
+    conn = None
+    try:
+        conn = get_db_conn()
+        if not conn:
+            flash('Database connection error.', 'error')
+            return redirect(url_for('super_admin_dashboard'))
+
+        request_data = None
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            # Fetch request details before updating
+            cur.execute(
+                "SELECT society_name, email FROM registration_requests WHERE id = %s AND status = 'pending'", 
+                (request_id,)
+            )
+            request_data = cur.fetchone()
+
+            # Update status to 'rejected'
+            cur.execute(
+                "UPDATE registration_requests SET status = 'rejected' WHERE id = %s AND status = 'pending'", 
+                (request_id,)
+            )
+
+            if cur.rowcount == 0:
+                flash("Request not found or was already processed.", 'warning')
+            else:
+                conn.commit()
+                flash("🚫 Registration request rejected successfully.", 'info')
+
+                # --- SEND REJECTION EMAIL ---
+                if request_data:
+                    send_rejection_email(request_data['email'], request_data['society_name'])
+
+    except Exception as e:
+        # app.logger.error(f"Rejection error for request {request_id}: {e}")
+        if conn: conn.rollback()
+        flash('An error occurred during rejection.', 'error')
+        
     finally:
         if conn: conn.close()
     
     return redirect(url_for('super_admin_dashboard'))
 
-@app.route('/invite/<string:token>', methods=['GET', 'POST'])
-def open_invite(token):
-    """Allows an invited admin to complete their registration by setting details and password."""
-    conn = get_db_conn()
-    if not conn:
-        return redirect(url_for('super_admin_dashboard'))
-
-    cursor = None
-    try:
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+@app.route('/register_request', methods=['GET', 'POST'])
+def register_request():
+    """Handles the public display and submission of the registration request form."""
+    
+    if request.method == 'POST':
+        society_name = request.form.get('society_name').strip()
+        email = request.form.get('email').strip()
+        mobile_number = request.form.get('mobile_number').strip()
         
-        # --- GET INVITE DETAILS (GET or initial POST check) ---
-        cursor.execute("""
-            SELECT * FROM new_admins 
-            WHERE invite_token = %s 
-            AND invite_end_at > CURRENT_TIMESTAMP 
-            AND review_status = 'new_invitation';
-        """, (token,))
-        invite_record = cursor.fetchone()
+        if not all([society_name, email, mobile_number]):
+            flash('All fields are required.', 'error')
+            return redirect(url_for('register_request'))
+
+        conn = get_db_conn() 
+        if not conn:
+            flash('A database connection error occurred.', 'error')
+            return redirect(url_for('register_request'))
         
-        if not invite_record:
-            # Check for expired/used/not-found status
-            cursor.execute("SELECT * FROM new_admins WHERE invite_token = %s", (token,))
-            any_record = cursor.fetchone()
-            if any_record and any_record['invite_end_at'] < datetime.now(IST).replace(tzinfo=None):
-                flash("❌ Invitation expired. Please contact Super Admin.", 'error')
-            elif any_record and any_record['review_status'] != 'new_invitation':
-                flash("⚠️ This invitation has already been submitted for review or approved.", 'warning')
-            else:
-                flash("🚫 Invalid or previously used invitation link.", 'error')
-            return redirect(url_for('super_admin_dashboard'))
+        try:
+            with conn.cursor() as cur:
+                # Check for duplicate society_name or email
+                cur.execute("""
+                    SELECT society_name, email 
+                    FROM registration_requests 
+                    WHERE (society_name = %s OR email = %s) 
+                    AND status IN ('pending', 'approved')
+                """, (society_name, email))
+                
+                duplicate = cur.fetchone()
+                if duplicate:
+                    if duplicate[0] == society_name:
+                        flash(f"❌ A request for society '{society_name}' already exists. Please mail admin for an invitation.", 'error')
+                    elif duplicate[1] == email:
+                        flash(f"❌ The email '{email}' is already registered for a Society", 'error')
+                    conn.close()
+                    return redirect(url_for('register_request'))
+                
+                # Insert new request
+                cur.execute("""
+                    INSERT INTO registration_requests (society_name, email, mobile_number) 
+                    VALUES (%s, %s, %s)
+                """, (society_name, email, mobile_number))
+                
+            conn.commit()
+            flash('✅ Your registration request has been submitted successfully for review! You will receive an invitation link soon.', 'success')
+            return redirect(url_for('register_request'))
+            
+        except (Exception, psycopg2.DatabaseError) as e:
+            # app.logger.error(f"Registration request submission error: {e}")
+            if conn: conn.rollback()
+            flash('An error occurred during submission. Please try again.', 'error')
+            
+        finally:
+            if conn: conn.close()
+    
+    # For GET requests, render the registration page
+    return render_template('register_request.html')
 
+@app.route('/register', methods=['GET', 'POST'])
+def open_invite():
+    token = request.args.get('token') or request.form.get('token')
 
-        # --- HANDLE FORM SUBMISSION (POST) ---
-        if request.method == 'POST':
+    # --- HANDLE FORM SUBMISSION (POST) ---
+    if request.method == 'POST':
+        conn = None
+        try:
             society_name = request.form['society_name']
             email = request.form['email']
             mobile = request.form['mobile_number']
@@ -491,7 +713,11 @@ def open_invite(token):
                 flash("All fields are required.", "error")
                 return redirect(url_for('open_invite', token=token))
 
-            # Hashed password generation removed. Using plain password.
+            # --- NO FIX: Hashing is preserved for new society admins ---
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+            conn = get_db_conn()
+            cursor = conn.cursor()
             
             cursor.execute("""
                 UPDATE new_admins 
@@ -512,7 +738,7 @@ def open_invite(token):
                 AND 
                     review_status = 'new_invitation';
             """, (
-                society_name, email, mobile, password, # <--- USE PLAIN TEXT password VARIABLE
+                society_name, email, mobile, psycopg2.Binary(hashed_password), # Hashing preserved
                 housing_type_selected, max_voters,
                 is_towerwise_flag, vote_per_house,
                 token
@@ -523,78 +749,125 @@ def open_invite(token):
             flash('Registration successful! Your application is under review.', 'success')
             return redirect(url_for('thank_you'))
 
-        # --- HANDLE GET (DISPLAY FORM) ---
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            flash(f"Error during registration: {e}", "error")
+        finally:
+            if conn:
+                conn.close()
+        
+        return redirect(url_for('open_invite', token=token))
+
+    # --- HANDLE PAGE LOAD (GET) ---
+    if request.method == 'GET':
+        conn = None
+        invite = None
+        if not token:
+            flash("No invitation token provided.", "error")
+            return redirect(url_for('super_admin_dashboard'))
+
+        try:
+            conn = get_db_conn()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cursor.execute("""
+                SELECT society_name, invite_token, invite_end_at, email 
+                FROM new_admins 
+                WHERE invite_token = %s 
+                AND review_status = 'new_invitation';
+            """, (token,))
+            invite = cursor.fetchone()
+        except Exception as e:
+            flash(f"Error fetching invite: {e}", "error")
+        finally:
+            if conn:
+                conn.close()
+
+        if not invite:
+            flash("Invalid, expired, or already used invitation link.", "error")
+            return redirect(url_for('super_admin_dashboard'))
+
+        # Trim INVITE_ prefix before rendering
+        invite['society_name'] = invite['society_name'].removeprefix('INVITE_')
         return render_template(
             'register.html',
-            invite=invite_record,
             token=token,
-            house_type_options=house_type
+            invite=invite,
+            house_type=house_type
         )
+   
+@app.route('/logout')
+def logout():
+    """Handles user logout by clearing the session."""
+    session.pop('user_id', None) 
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('super_admin_dashboard'))
 
-    except Exception as e:
-        if conn: conn.rollback()
-        flash(f"An unexpected error occurred during registration: {e}", 'error')
-        return redirect(url_for('super_admin_dashboard'))
-    finally:
-        if conn: conn.close()
-
-@app.route('/super_admin/approve_society/<string:society_name>', methods=['POST'])
-@login_required
+@app.route('/super_admin/approve/<string:society_name>', methods=['POST'])
+@admin_required
 def approve_society(society_name):
-    """
-    Approves a submitted admin registration. 
-    Moves the admin details (including plain text password) from new_admins to admins.
-    """
+    """Approves a society that has submitted its details."""
     conn = get_db_conn()
-    if not conn:
-        return redirect(url_for('super_admin_dashboard'))
     
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
-        # 1. Fetch data from new_admins
-        cursor.execute("SELECT * FROM new_admins WHERE society_name = %s AND review_status = 'submitted_for_review'", (society_name,))
-        new_society = cursor.fetchone() 
+
+        cursor.execute("""
+            SELECT 
+                society_name, role, password_hash, max_voters, housing_type, is_towerwise, vote_per_house, mobile_number, email 
+            FROM 
+                new_admins 
+            WHERE 
+                society_name = %s 
+            AND 
+                review_status = 'submitted_for_review';
+        """, (society_name,))
+
+        new_society = cursor.fetchone()
 
         if not new_society:
-            flash("⚠️ Error: Submitted society not found or not ready for approval.", 'warning')
-            conn.rollback()
+            flash("🚨 Error: Submitted details not found or already processed for approval.", 'error')
             return redirect(url_for('super_admin_dashboard'))
 
         admin_insert_tuple = (
             new_society['society_name'], 
             'admin', 
-            new_society['password_hash'], # <--- Plain text password transferred
+            new_society['password_hash'], # Hashed password (bytes) is transferred
             new_society['max_voters'], 
-            new_society['housing_type'],
-            new_society['email'],
-            new_society['mobile_number'],
-            new_society['is_towerwise'],
-            new_society['vote_per_house']
+            new_society['housing_type']
         )
-        
-        # 2. Insert into admins (ON CONFLICT handles unique constraint errors)
+
         cursor.execute("""
-            INSERT INTO admins (
-                society_name, role, password_hash, max_voters, housing_type, email, mobile_number, is_towerwise, vote_per_house
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO admins (society_name, role, password_hash, max_voters, housing_type)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (society_name, role) DO NOTHING;
         """, admin_insert_tuple)
-        
-        # 3. Update new_admins status
+
+        cursor.execute("""
+            INSERT INTO settings (society_name, max_voters, is_towerwise, housing_type, vote_per_house)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (society_name) DO NOTHING;
+        """, (
+            new_society['society_name'], 
+            new_society['max_voters'], 
+            new_society['is_towerwise'], 
+            new_society['housing_type'],
+            new_society['vote_per_house']
+        ))
+
         cursor.execute("""
             UPDATE new_admins 
             SET review_status = 'approved',
                 responded_at = CURRENT_TIMESTAMP
-            WHERE society_name = %s
-            AND review_status = 'submitted_for_review';
+            WHERE society_name = %s;
         """, (society_name,))
 
-        conn.commit()
-        # Optionally send a final confirmation email to the admin here
-        flash(f"✅ Society '{society_name}' successfully **approved**. Admin account is now active.", 'success')
+        conn.commit() 
+        flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system.", 'success')
 
+    except psycopg2.IntegrityError as e:
+        if conn: conn.rollback()
+        flash(f"🚨 Approval failed: Society '{society_name}' may already exist in the active tables. Error: {e}", 'error')
     except Exception as e:
         if conn: conn.rollback()
         flash(f"An unexpected error occurred during approval: {e}", 'error')
@@ -604,10 +877,10 @@ def approve_society(society_name):
     
     return redirect(url_for('super_admin_dashboard'))
 
-@app.route('/super_admin/reject_society/<string:society_name>', methods=['POST'])
-@login_required
+@app.route('/super_admin/reject/<string:society_name>', methods=['POST'])
+@admin_required
 def reject_society(society_name):
-    """Rejects a submitted admin registration after they have submitted its details."""
+    """Rejects a society that has submitted its details."""
     conn = get_db_conn()
     
     try:
@@ -647,7 +920,12 @@ def thank_you():
     return "<h1>Thank You! 🙏</h1><p>Your details are submitted and are awaiting Super Admin review.</p>"
 
 
-# --- STARTUP HOOK & APP RUN 
+# --- STARTUP HOOK & APP RUN ---
+
 if __name__ == '__main__':
-    # ensure_tables_exist() is now called via @app.before_request
-    app.run(debug=True, port=5003)
+    with app.app_context():
+        # ensures the tables are setup and the system admin exists on startup
+        # assuming the tables are properly defined elsewhere or via a schema migration
+        ensure_super_admin_exists() 
+    # The original file had two app.run() calls; keeping only the one that runs the application
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
