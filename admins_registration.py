@@ -300,14 +300,16 @@ def super_admin_dashboard():
             if conn: conn.close()
 
         if user_record and password:
-            stored_hash = bytes(user_record['password_hash'])
-            if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
-                
+            stored_password = user_record['password_hash']  # Plain text from DB
+
+            # Compare trimmed strings (safe and simple for plain text storage)
+            if str(stored_password).strip() == password.strip():
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('super_admin_dashboard'))
-        
+
+        # If password check fails or user not found
         flash('Invalid Password.', 'error')
         return render_template('super_admin_dashboard.html', is_authenticated=False)
 
