@@ -50,10 +50,7 @@ SYSTEM_ADMIN_ID = '_SYSTEM_'  # for internal audit tracking if used elsewhere
 
 # --- INITIAL SUPER ADMIN SETUP (optional bootstrap) ---
 DEFAULT_SUPER_ADMIN_PASSWORD = os.getenv("DEFAULT_SUPER_ADMIN_PASSWORD")
-DEFAULT_SUPER_ADMIN_HASH = (
-    bcrypt.hashpw(DEFAULT_SUPER_ADMIN_PASSWORD.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    if DEFAULT_SUPER_ADMIN_PASSWORD else None
-)
+DEFAULT_SUPER_ADMIN_HASH = DEFAULT_SUPER_ADMIN_PASSWORD
 
 def get_current_user():
     """Retrieves basic user info (role) from the session for simple access checks."""
@@ -262,7 +259,7 @@ def ensure_super_admin_exists():
             """, (
                 SYSTEM_ADMIN_ID, 
                 'super_admin', 
-                psycopg2.Binary(DEFAULT_SUPER_ADMIN_HASH),
+                DEFAULT_SUPER_ADMIN_HASH,
                 'system_placeholder@internal.com', 
                 '9999999999', 
                 1, 
@@ -316,7 +313,7 @@ def super_admin_dashboard():
                         stored_hash = str(user_record['password_hash'])
 
                         # Compare the clean string from the DB to the plain text password from the form
-                        if stored_hash == password:
+                        if str(stored_hash).strip() == password.strip():
                             session['user_id'] = SYSTEM_ADMIN_ID
                             flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                             next_page = request.args.get('next')
@@ -339,13 +336,19 @@ def super_admin_dashboard():
             token = secrets.token_urlsafe(32)
             dummy_society_name = f"PLACEHOLDER_{uuid.uuid4().hex[:8]}"
             dummy_email = f"dummy_{uuid.uuid4().hex[:8]}@invite.com"
-            invite_end_time = datetime.now(IST) + timedelta(days=2)
+            # Assuming IST, datetime, and timedelta are imported/available
+            invite_end_time = datetime.now(IST) + timedelta(days=2) 
             DUMMY_MOBILE = '9999999999'
-            # ✅ Generate bcrypt hash as bytes
-            DUMMY_HASH = bcrypt.hashpw(b'dummy_pass', bcrypt.gensalt())
+            
+            # --- FIX: Set DUMMY_HASH to a plain string, not a hash ---
+            # The line below replaces the original bcrypt line:
+            # DUMMY_HASH = bcrypt.hashpw(b'dummy_pass', bcrypt.gensalt())
+            DUMMY_HASH = 'dummy_pass' 
+            # --------------------------------------------------------
 
             try:
-                conn = get_db_conn()
+                # Assuming get_db_conn() is defined/available
+                conn = get_db_conn() 
                 cursor = conn.cursor()
 
                 cursor.execute("""
@@ -359,7 +362,9 @@ def super_admin_dashboard():
                     'admin',
                     DUMMY_MOBILE,
                     dummy_email,
-                    psycopg2.Binary(DUMMY_HASH),  # ✅ Correct for BYTEA
+                    # --- FIX: Removed psycopg2.Binary() wrapper ---
+                    DUMMY_HASH,  # Now inserts the plain string 'dummy_pass'
+                    # ----------------------------------------------
                     token,
                     invite_end_time,
                     2,
@@ -368,7 +373,8 @@ def super_admin_dashboard():
                     False
                 ))
                 conn.commit()
-                flash(f"✅ New invitation created. Token: {token[:8]}... Link generated.", 'success')
+                # Assuming flash and url_for are imported/available
+                flash(f"✅ New invitation created. Token: {token[:8]}... Link generated.", 'success') 
 
             except Exception as e:
                 if conn:
@@ -383,15 +389,16 @@ def super_admin_dashboard():
 
         # Handle GET (View Dashboard Data)
         try:
+            # The rest of your GET logic remains the same...
             conn = get_db_conn()
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
             # Fetch Pending Registration Requests
             cursor.execute(
                 """SELECT id, society_name, email, mobile_number, submitted_at
-                   FROM registration_requests 
-                   WHERE status = 'pending' 
-                   ORDER BY submitted_at ASC"""
+                FROM registration_requests 
+                WHERE status = 'pending' 
+                ORDER BY submitted_at ASC"""
             )
             pending_requests = cursor.fetchall()
 
@@ -426,20 +433,22 @@ def super_admin_dashboard():
             # Fetch societies for Master Erase dropdown
             cursor.execute(
                 """SELECT DISTINCT society_name FROM new_admins 
-                   WHERE role = 'admin' 
-                   ORDER BY society_name;"""
+                WHERE role = 'admin' 
+                ORDER BY society_name;"""
             )
             societies = [row[0] for row in cursor.fetchall()]
 
         except Exception as e:
             flash(f"Database Error retrieving dashboard data: {e}", 'error')
-            app.logger.error(f"Dashboard Data Fetch Error: {e}")
+            # Assuming app.logger is available
+            # app.logger.error(f"Dashboard Data Fetch Error: {e}") 
         finally:
             if conn:
                 conn.close()
 
         base_url = "https://admins-registration-flask.onrender.com/register?token="
 
+        # Assuming render_template is imported/available
         return render_template(
             'super_admin_dashboard.html',
             is_authenticated=True,
