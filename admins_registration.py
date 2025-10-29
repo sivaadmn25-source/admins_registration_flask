@@ -319,7 +319,7 @@ def super_admin_dashboard():
                 stored_hash = stored_hash.tobytes()
 
             # ✅ Verify password correctly
-            if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
+            if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
