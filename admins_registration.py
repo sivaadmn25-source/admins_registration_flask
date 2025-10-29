@@ -123,7 +123,7 @@ def send_invite_email(recipient_email, society_name, invite_token, base_url):
 
     Registration Link: {registration_link}
 
-    This link is valid for 14 days. If you have any issues, please contact system support.
+    This link is valid for 2 days. If you have any issues, please contact system support.
 
     Thank you,
     The Election Management System Team
@@ -200,11 +200,12 @@ SIVA Admin Team.
 def generate_invite_from_request(request_data, conn):
     """Generates an invitation token, saves it to new_admins (as a placeholder invite), and updates request status."""
     token = secrets.token_urlsafe(32)
-    # Set expiry 14 days from now, using the defined IST timezone
-    invite_end_at = datetime.now(IST) + timedelta(days=14) 
-    # Use dummy values required by new_admins table schema
-    DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
-    
+    # Set expiry 2 days from now, using the defined IST timezone
+    invite_end_at = datetime.now(IST) + timedelta(days=2)
+
+    # ✅ Generate bcrypt hash as bytes (for BYTEA column)
+    DUMMY_HASH = bcrypt.hashpw(b'dummy_pass', bcrypt.gensalt())
+
     with conn.cursor() as cur:
         # 1. Insert into new_admins (as placeholder invite)
         cur.execute(
@@ -214,22 +215,26 @@ def generate_invite_from_request(request_data, conn):
                ) 
                VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",
             (
-                f"INVITE_{request_data['society_name']}", # Using a prefix for society_name as a placeholder
-                'admin', 
-                request_data['mobile_number'], 
-                request_data['email'], 
-                psycopg2.Binary(DUMMY_HASH), 
-                token, 
+                f"INVITE_{request_data['society_name']}",  # Placeholder prefix
+                'admin',
+                request_data['mobile_number'],
+                request_data['email'],
+                psycopg2.Binary(DUMMY_HASH),  # ✅ correctly wrap in Binary for BYTEA
+                token,
                 invite_end_at,
-                1, # Min required value
-                'Apartment-Single Tower', 
-                'new_invitation', 
+                1,  # Minimum required value
+                'Apartment-Single Tower',
+                'new_invitation',
                 False
             )
         )
+
         # 2. Update registration_requests status to approved
-        cur.execute("UPDATE registration_requests SET status = 'approved' WHERE id = %s", (request_data['id'],))
-        
+        cur.execute(
+            "UPDATE registration_requests SET status = 'approved' WHERE id = %s",
+            (request_data['id'],)
+        )
+
     return token
 
 # --- INITIAL SETUP HOOK ---
@@ -285,14 +290,14 @@ def super_admin_dashboard():
     ensure_super_admin_exists()
     user = get_current_user()
     is_authenticated = user is not None
-    
+
     # --- STEP 1: HANDLE LOGIN POST REQUEST ---
     if request.method == 'POST' and not is_authenticated:
         password = request.form.get('password')
-        
+
         conn = None
         user_record = None
-        
+
         try:
             conn = get_db_conn()
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -304,42 +309,48 @@ def super_admin_dashboard():
             flash(f'Database error during login: {e}', 'error')
             return render_template('super_admin_dashboard.html', is_authenticated=False)
         finally:
-            if conn: conn.close()
+            if conn:
+                conn.close()
 
         if user_record and password:
-            stored_hash = bytes(user_record['password_hash'])
+            # ✅ Correct way to read BYTEA data as bytes
+            stored_hash = user_record['password_hash']
+            if isinstance(stored_hash, memoryview):
+                stored_hash = stored_hash.tobytes()
+
+            # ✅ Verify password correctly
             if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
-                
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('super_admin_dashboard'))
-        
+
         flash('Invalid Password.', 'error')
         return render_template('super_admin_dashboard.html', is_authenticated=False)
 
     # --- STEP 2: HANDLE AUTHENTICATED REQUESTS (GET or POST for invite creation) ---
     if is_authenticated:
-        
+
         conn = None
-        pending_approvals = [] 
-        active_invites = []    
+        pending_approvals = []
+        active_invites = []
         pending_requests = []
-        societies = [] # <-- **FIX**: Initialize societies list
-        
+        societies = []
+
         # Handle POST for Invitation Creation (Existing Logic)
         if request.method == 'POST':
-            token = secrets.token_urlsafe(32) 
-            dummy_society_name = f"PLACEHOLDER_{uuid.uuid4().hex[:8]}" 
+            token = secrets.token_urlsafe(32)
+            dummy_society_name = f"PLACEHOLDER_{uuid.uuid4().hex[:8]}"
             dummy_email = f"dummy_{uuid.uuid4().hex[:8]}@invite.com"
-            invite_end_time = datetime.now(IST) + timedelta(days=14)
+            invite_end_time = datetime.now(IST) + timedelta(days=2)
             DUMMY_MOBILE = '9999999999'
-            DUMMY_HASH = bcrypt.hashpw('dummy_pass'.encode('utf-8'), bcrypt.gensalt())
-            
+            # ✅ Generate bcrypt hash as bytes
+            DUMMY_HASH = bcrypt.hashpw(b'dummy_pass', bcrypt.gensalt())
+
             try:
                 conn = get_db_conn()
                 cursor = conn.cursor()
-                
+
                 cursor.execute("""
                     INSERT INTO new_admins (
                         society_name, role, mobile_number, email, password_hash, invite_token, 
@@ -347,46 +358,47 @@ def super_admin_dashboard():
                     ) 
                     VALUES (UPPER(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """, (
-                    dummy_society_name, 
-                    'admin', 
-                    DUMMY_MOBILE, 
-                    dummy_email, 
-                    psycopg2.Binary(DUMMY_HASH), 
-                    token, 
+                    dummy_society_name,
+                    'admin',
+                    DUMMY_MOBILE,
+                    dummy_email,
+                    psycopg2.Binary(DUMMY_HASH),  # ✅ Correct for BYTEA
+                    token,
                     invite_end_time,
-                    2, 
-                    'xyz', 
-                    'new_invitation', 
-                    False 
+                    2,
+                    'xyz',
+                    'new_invitation',
+                    False
                 ))
                 conn.commit()
                 flash(f"✅ New invitation created. Token: {token[:8]}... Link generated.", 'success')
-                
+
             except Exception as e:
-                if conn: conn.rollback()
+                if conn:
+                    conn.rollback()
                 error_msg = f"DB INSERT FAILED: Check constraints/columns. Error: {e}"
                 flash(error_msg, 'error')
             finally:
-                if conn: conn.close()
-                
-            # **FIX**: Must redirect to GET after a POST
+                if conn:
+                    conn.close()
+
             return redirect(url_for('super_admin_dashboard'))
-                
+
         # Handle GET (View Dashboard Data)
         try:
             conn = get_db_conn()
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-            
+
             # Fetch Pending Registration Requests
             cursor.execute(
                 """SELECT id, society_name, email, mobile_number, submitted_at
                    FROM registration_requests 
                    WHERE status = 'pending' 
                    ORDER BY submitted_at ASC"""
-            ) 
+            )
             pending_requests = cursor.fetchall()
-            
-            # Fetch Pending Approvals (Existing Logic)
+
+            # Fetch Pending Approvals
             cursor.execute("""
                 SELECT 
                     society_name, email, mobile_number, max_voters, housing_type, is_towerwise, responded_at
@@ -399,8 +411,8 @@ def super_admin_dashboard():
                 ORDER BY responded_at DESC;
             """)
             pending_approvals = cursor.fetchall()
-            
-            # Fetch Active Invitations (Existing Logic)
+
+            # Fetch Active Invitations
             cursor.execute("""
                 SELECT 
                     society_name, invite_token, invited_at, invite_end_at, email
@@ -414,7 +426,6 @@ def super_admin_dashboard():
             """)
             active_invites = cursor.fetchall()
 
-            # --- *** START FIX *** ---
             # Fetch societies for Master Erase dropdown
             cursor.execute(
                 """SELECT DISTINCT society_name FROM new_admins 
@@ -422,24 +433,25 @@ def super_admin_dashboard():
                    ORDER BY society_name;"""
             )
             societies = [row[0] for row in cursor.fetchall()]
-            # --- *** END FIX *** ---
 
         except Exception as e:
             flash(f"Database Error retrieving dashboard data: {e}", 'error')
             app.logger.error(f"Dashboard Data Fetch Error: {e}")
         finally:
-            if conn: conn.close()
+            if conn:
+                conn.close()
 
-        current_host_port = request.host.split(':')[-1] if ':' in request.host else 5004
         base_url = "https://admins-registration-flask.onrender.com/register?token="
 
-        return render_template('super_admin_dashboard.html', 
-                               is_authenticated=True, 
-                               pending_approvals=pending_approvals, 
-                               active_invites=active_invites,
-                               pending_requests=pending_requests,
-                               societies=societies, # <-- **FIX**: Pass societies to template
-                               base_url=base_url)
+        return render_template(
+            'super_admin_dashboard.html',
+            is_authenticated=True,
+            pending_approvals=pending_approvals,
+            active_invites=active_invites,
+            pending_requests=pending_requests,
+            societies=societies,
+            base_url=base_url
+        )
 
     # --- STEP 3: HANDLE UNAUTHENTICATED GET REQUESTS ---
     else:
