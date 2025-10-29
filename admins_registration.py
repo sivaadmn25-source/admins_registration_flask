@@ -243,7 +243,7 @@ def ensure_super_admin_exists():
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s);
             """, (
                 SYSTEM_ADMIN_ID, 
-                'super_admin', 
+                'SUPER_ADMIN', 
                 # --- FIX B: Insert plain text password directly, assuming TEXT column ---
                 DEFAULT_SUPER_ADMIN_HASH,  # Pass plain string
                 # ------------------------------------------------------------------------
