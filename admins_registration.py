@@ -315,11 +315,10 @@ def super_admin_dashboard():
         if user_record and password:
             # ✅ Correct way to read BYTEA data as bytes
             stored_hash = user_record['password_hash']
-            if isinstance(stored_hash, memoryview):
-                stored_hash = stored_hash.tobytes()
+
 
             # ✅ Verify password correctly
-            if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+            if stored_hash == password:
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
