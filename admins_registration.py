@@ -927,9 +927,14 @@ def index():
 def thank_you():
     return "<h1>Thank You! 🙏</h1><p>Your details are submitted and are awaiting Super Admin review.</p>"
 
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
-# --- STARTUP HOOK & APP RUN ---
-
+# --- STARTUP HOOK & APP RUN --- 
 if __name__ == '__main__':
     with app.app_context():
         # ensures the tables are setup and the system admin exists on startup
