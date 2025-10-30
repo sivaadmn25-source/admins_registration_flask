@@ -110,7 +110,7 @@ def get_db_conn():
 def send_invite_email(recipient_email, society_name, invite_token, base_url):
     """Send the registration invitation email using Flask-Mail."""
     try:
-        registration_link = f"{base_url}/register/{invite_token}"
+        registration_link = base_url
         subject = f"Registration Invitation for {society_name}"
 
         body = f"""Dear Admin of {society_name},
@@ -561,10 +561,12 @@ def approve_request(request_id):
 
         # --- FLASH MESSAGE ---
         flash(
-            f"✅ Approved request for **{clean_society_name}**. "
-            f"Invite Token: **{invite_token}** generated {email_status}.",
+            f"✅ Approved request for **{clean_society_name}**.<br>"
+            f"Invite Link: <a href='{registration_link}' target='_blank'>{registration_link}</a><br>"
+            f"Email Status: {email_status}",
             'success'
         )
+
 
     except Exception as e:
         app.logger.error(f"Approval error for request {request_id}: {e}")

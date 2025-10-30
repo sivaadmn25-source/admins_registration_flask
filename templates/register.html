@@ -289,10 +289,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Enable Bootstrap tooltips
             $('[data-toggle="tooltip"]').tooltip();
-            const houseTypeSelect = document.getElementById('house_type');
-            updateTowerwiseState(); 
-            houseTypeSelect.addEventListener('change', updateTowerwiseState);
+
+            // Disable right-click (context menu)
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
         });
         // Anti-debugging/anti-inspection code
         

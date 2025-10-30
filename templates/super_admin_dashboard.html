@@ -171,7 +171,7 @@
         {% if messages %}
         {% for category, message in messages %}
         <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'info') }}">
-            {{ message }}
+            {{ message|safe }}
         </div>
         {% endfor %}
         {% endif %}
@@ -495,10 +495,13 @@
     });
 });
         document.addEventListener('DOMContentLoaded', function() {
+            // Enable Bootstrap tooltips
             $('[data-toggle="tooltip"]').tooltip();
-            const houseTypeSelect = document.getElementById('house_type');
-            updateTowerwiseState(); 
-            houseTypeSelect.addEventListener('change', updateTowerwiseState);
+
+            // Disable right-click (context menu)
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
         });
     </script>
     <footer class="fixed-bottom text-center text-muted" style="font-size: 1rem; padding: 10px; background-color: #f4f7f6; z-index: 1000;">
