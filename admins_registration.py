@@ -123,6 +123,10 @@ def send_email_brevo(to_email, subject, body):
         print("Body:\n", body)
         return True
 
+    # --- FIX 1: Convert plain text newlines (\n) to HTML line breaks (<br>)
+    # This minimal conversion is required by the API/Email Clients for content rendering.
+    html_body = body.replace('\n', '<br>')
+    
     try:
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
@@ -130,12 +134,16 @@ def send_email_brevo(to_email, subject, body):
             "content-type": "application/json",
             "api-key": brevo_api_key
         } 
+        
+        # --- MODIFIED PAYLOAD ---
         payload = {
             "sender": {"name": "SIVA Admin", "email": "siva.admn25@gmail.com"},
             "to": [{"email": to_email}],
             "subject": subject,
-            "textContent": body
+            "textContent": body,      
+            "htmlContent": html_body  # <--- CRITICAL ADDITION for body visibility
         }
+        # --------------------------
 
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code in (200, 201):
@@ -164,7 +172,7 @@ This link is valid for 2 days. If you have any issues, please contact system sup
 
 Thank you,
 The Election Management System Team
-"""
+""".strip() # <-- FIX 2A: Added .strip() to clean string
     return send_email_brevo(recipient_email, subject, body)
 
 
@@ -183,10 +191,28 @@ If you have any questions, please feel free to contact us.
 
 Sincerely,
 SIVA Admin Team.
-""".strip()
-     
+""".strip() # <-- FIX 2B: Added .strip() to clean string
+    app.logger.info(f"Sending Final Approval Email: Subject: {subject}")
+    app.logger.info(f"Email Body:\n{body}")
+    
     return send_email_brevo(recipient_email, subject, body)
     
+def send_rejection_email(recipient_email, society_name, reason=None):
+    """Send rejection email (Resend or simulate)."""
+    subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
+    body = f"""Dear Admin of {society_name},
+
+We regret to inform you that your registration request for '{society_name}' has been rejected.
+
+{f"Reason: {reason}" if reason else ""}
+
+If you have any questions or believe this was a mistake, please contact the system support team.
+
+Sincerely,
+SIVA Admin Team.
+""".strip() # <-- FIX 2C: Added .strip() to clean string
+    return send_email_brevo(recipient_email, subject, body)
+  
 def send_rejection_email(recipient_email, society_name, reason=None):
     """Send rejection email (Resend or simulate)."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
