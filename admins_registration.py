@@ -111,12 +111,12 @@ def get_db_conn():
 # --- Email Sending Functions (No change here, standard Flask-Mail) ---
 # --- Email Sending Functions (SIMULATED for Render; no SMTP) ---
 
-def send_invite_email(recipient_email, society_name, invite_token, base_url):
+def send_invite_email(recipient_email, society_name, invite_token, registration_link):
     """Send the registration invitation email (simulation; prints to logs)."""
     try:
         # base_url is expected to be the fully qualified URL (e.g. https://.../register)
         # we'll append token as query param for clarity
-        registration_link = f"{base_url}?token={invite_token}"
+        registration_link = f"{base_url}"
 
         subject = f"Registration Invitation for {society_name}"
         body = f"""Dear Admin of {society_name},
