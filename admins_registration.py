@@ -183,12 +183,10 @@ If you have any questions, please feel free to contact us.
 
 Sincerely,
 SIVA Admin Team.
-"""
-    app.logger.info(f"Sending Final Approval Email: Subject: {subject}")
-    app.logger.info(f"Email Body:\n{body}")
-    
+""".strip()  # <--- ADD .strip() here
+    # ... rest of the function ...
     return send_email_brevo(recipient_email, subject, body)
-    
+   
 def send_rejection_email(recipient_email, society_name, reason=None):
     """Send rejection email (Resend or simulate)."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
