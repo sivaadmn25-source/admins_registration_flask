@@ -130,8 +130,8 @@ The Election Management System Team
         msg = Message(
             subject=subject,
             recipients=[recipient_email],
-            body=body,
-            sender=app.config["MAIL_DEFAULT_SENDER"]
+            body=body
+        #    sender=app.config["MAIL_DEFAULT_SENDER"]
         )
 
         mail.send(msg)
@@ -563,7 +563,7 @@ def approve_request(request_id):
         flash(
             f"✅ Approved request for **{clean_society_name}**.<br>"
             f"Invite Link: <a href='{registration_link}' target='_blank'>{registration_link}</a><br>"
-            f"Email Status: {email_status}",
+           # f"Email Status: {email_status}",
             'success'
         )
 
