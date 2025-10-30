@@ -113,39 +113,40 @@ def get_db_conn():
 # --- Email Sending Functions (No change here, standard Flask-Mail) ---
 # --- Email Sending Functions (SIMULATED for Render; no SMTP) ---
 
-def send_email_resend(to_email, subject, body):
-    """Send email using Resend API if API key is set."""
-    if not RESEND_API_KEY:
-        # Simulation mode
-        print("📧 [SIMULATED EMAIL - NO RESEND KEY FOUND]")
+def send_email_brevo(to_email, subject, body):
+    """Send email using Brevo API."""
+    brevo_api_key = os.getenv("BREVO_API_KEY")
+    if not brevo_api_key:
+        print("⚠️ No Brevo API key found — simulation mode.")
         print("To:", to_email)
         print("Subject:", subject)
         print("Body:\n", body)
         return True
 
     try:
+        url = "https://api.brevo.com/v3/smtp/email"
         headers = {
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
+            "accept": "application/json",
+            "content-type": "application/json",
+            "api-key": brevo_api_key
+        } 
         payload = {
-            "from": "SIVA Admin <onboarding@resend.dev>",
-            "to": [to_email],
+            "sender": {"name": "SIVA Admin", "email": "siva.admn25@gmail.com"},
+            "to": [{"email": to_email}],
             "subject": subject,
-            "text": body
+            "textContent": body
         }
 
-        response = requests.post(RESEND_API_URL, headers=headers, json=payload)
-
+        response = requests.post(url, headers=headers, json=payload)
         if response.status_code in (200, 201):
-            print(f"✅ Email sent to {to_email}") 
+            print(f"✅ Email sent to {to_email} via Brevo")
+            return True
         else:
-            print(f"❌ Resend API failed: {response.status_code}, {response.text}")
-        return response.status_code in (200, 201)    
+            print(f"❌ Brevo API failed: {response.status_code}, {response.text}")
+            return False
 
     except Exception as e:
-        print(f"❌ send_email_resend exception: {e}")
+        print(f"❌ send_email_brevo exception: {e}")
         return False
 
 def send_invite_email(recipient_email, society_name, invite_token, registration_link):
@@ -164,7 +165,7 @@ This link is valid for 2 days. If you have any issues, please contact system sup
 Thank you,
 The Election Management System Team
 """
-    return send_email_resend(recipient_email, subject, body)
+    return send_email_brevo(recipient_email, subject, body)
 
 
 def send_final_approval_email(recipient_email, society_name):
@@ -183,7 +184,7 @@ If you have any questions, please feel free to contact us.
 Sincerely,
 SIVA Admin Team.
 """
-    return send_email_resend(recipient_email, subject, body)
+    return send_email_brevo(recipient_email, subject, body)
 
 
 def send_rejection_email(recipient_email, society_name, reason=None):
@@ -200,7 +201,7 @@ If you have any questions or believe this was a mistake, please contact the syst
 Sincerely,
 SIVA Admin Team.
 """
-    return send_email_resend(recipient_email, subject, body)
+    return send_email_brevo(recipient_email, subject, body)
 
 def generate_invite_from_request(request_data, conn):
     """Generates an invitation token, saves it to new_admins (as a placeholder invite), and updates request status."""
