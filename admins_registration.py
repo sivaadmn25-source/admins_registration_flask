@@ -905,7 +905,7 @@ def approve_society(society_name):
         conn.commit()
 
         # ✅ Send the final approval email AFTER commit
-        send_final_approval_email(new_society['email'], new_society['society_name'])
+        email_sent = send_final_approval_email(new_society['email'], new_society['society_name'])
 
         flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system. Final email sent!", 'success')
 
