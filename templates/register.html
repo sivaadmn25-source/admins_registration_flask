@@ -270,35 +270,45 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
-    <script>
-        const MULTI_TOWER_TYPE = 'Apartment-Multi Towers';
+<script>
+    const MULTI_TOWER_TYPE = 'Apartment-Multiple Towers'; // match your dropdown label exactly
 
-        function updateTowerwiseState() {
-            const housingType = document.getElementById('house_type').value;
-            const towerwiseCheckbox = document.getElementById('is_towerwise');
-            const enable = housingType === MULTI_TOWER_TYPE;
+    function updateTowerwiseState() {
+        const housingType = document.getElementById('house_type').value;
+        const towerwiseCheckbox = document.getElementById('is_towerwise');
+        const enable = housingType === MULTI_TOWER_TYPE;
 
-            if (enable) {
-                towerwiseCheckbox.disabled = false;
-                towerwiseCheckbox.closest('.form-check').querySelector('label').removeAttribute('disabled');
-            } else {
-                towerwiseCheckbox.disabled = true;
-                towerwiseCheckbox.checked = false;
-                towerwiseCheckbox.closest('.form-check').querySelector('label').setAttribute('disabled', 'true');
-            }
+        if (enable) {
+            towerwiseCheckbox.disabled = false;
+            towerwiseCheckbox.closest('.form-check')
+                .querySelector('label')
+                .removeAttribute('disabled');
+        } else {
+            towerwiseCheckbox.disabled = true;
+            towerwiseCheckbox.checked = false;
+            towerwiseCheckbox.closest('.form-check')
+                .querySelector('label')
+                .setAttribute('disabled', 'true');
         }
+    }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Enable Bootstrap tooltips
-            $('[data-toggle="tooltip"]').tooltip();
+    document.addEventListener('DOMContentLoaded', function() {
+        // Enable Bootstrap tooltips
+        $('[data-toggle="tooltip"]').tooltip();
 
-            // Disable right-click (context menu)
-            document.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-            });
+        // Disable right-click (context menu)
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
         });
-        // Anti-debugging/anti-inspection code
-        
-    </script>
+
+        // ✅ Attach listener to dropdown
+        const housingTypeSelect = document.getElementById('house_type');
+        housingTypeSelect.addEventListener('change', updateTowerwiseState);
+
+        // ✅ Run once on load to set the correct initial state
+        updateTowerwiseState();
+    });
+</script>
+
 </body>
 </html>

@@ -113,11 +113,7 @@ def get_db_conn():
 
 def send_invite_email(recipient_email, society_name, invite_token, registration_link):
     """Send the registration invitation email (simulation; prints to logs)."""
-    try:
-        # base_url is expected to be the fully qualified URL (e.g. https://.../register)
-        # we'll append token as query param for clarity
-        registration_link = f"{base_url}"
-
+    try: 
         subject = f"Registration Invitation for {society_name}"
         body = f"""Dear Admin of {society_name},
 
@@ -137,7 +133,7 @@ The Election Management System Team
         print("📧 [SIMULATED INVITE EMAIL]")
         print("To:", recipient_email)
         print("Subject:", subject)
-        print("Body:\\n", body)
+        print("Body:\n", body)
         return True
 
     except Exception as e:
