@@ -83,7 +83,8 @@ def admin_required(f):
         user = get_current_user()
         if user is None:
             flash('Please log in to access this page.', 'info')
-            return redirect(url_for('super_admin_dashboard', next=request.url))
+            return redirect(url_for('login', next=request.url))
+
         
         if user['role'] != 'SUPER_ADMIN':
             flash("🚫 Access denied.", 'error')
