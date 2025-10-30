@@ -10,7 +10,8 @@ from functools import wraps
 from constants import house_type 
 import secrets 
 import pytz 
-from flask_mail import Mail, Message 
+#from flask_mail import Mail, Message 
+import requests
 # -------------------------
 
 # Define your local timezone (assuming IST)
@@ -33,16 +34,17 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 
 # --- EMAIL CONFIGURATION ---
-app.config.update(
-    MAIL_SERVER=os.getenv('MAIL_SERVER', 'smtp.gmail.com'),
-    MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
-    MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1'],
-    MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
-    MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
-    MAIL_DEFAULT_SENDER=os.getenv('MAIL_USERNAME')  # ✅ ensure sender is set
-)
+#app.config.update(
+#    MAIL_SERVER=os.getenv('MAIL_SERVER', 'smtp.gmail.com'),
+#    MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
+#    MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1'],
+#    MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
+#    MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
+#    MAIL_DEFAULT_SENDER=os.getenv('MAIL_USERNAME')  # ✅ ensure sender is set
+#)
 
-mail = Mail(app)
+#mail = Mail(app)
+EMAIL_FROM = os.getenv('MAIL_USERNAME')
 
 # --- SYSTEM CONSTANTS (optional tracking) ---
 SYSTEM_ADMIN_ID = '_SYSTEM_'  # for internal audit tracking if used elsewhere
@@ -107,12 +109,16 @@ def get_db_conn():
         raise ConnectionError("Could not connect to the database. Check .env settings.")
 
 # --- Email Sending Functions (No change here, standard Flask-Mail) ---
-def send_invite_email(recipient_email, society_name, invite_token, base_url):
-    """Send the registration invitation email using Flask-Mail."""
-    try:
-        registration_link = base_url
-        subject = f"Registration Invitation for {society_name}"
+# --- Email Sending Functions (SIMULATED for Render; no SMTP) ---
 
+def send_invite_email(recipient_email, society_name, invite_token, base_url):
+    """Send the registration invitation email (simulation; prints to logs)."""
+    try:
+        # base_url is expected to be the fully qualified URL (e.g. https://.../register)
+        # we'll append token as query param for clarity
+        registration_link = f"{base_url}?token={invite_token}"
+
+        subject = f"Registration Invitation for {society_name}"
         body = f"""Dear Admin of {society_name},
 
 Your registration request has been approved!
@@ -127,35 +133,29 @@ Thank you,
 The Election Management System Team
 """
 
-    #    msg = Message(
-    #        subject=subject,
-    #        recipients=[recipient_email],
-    #        body=body
-        #    sender=app.config["MAIL_DEFAULT_SENDER"]
-    #    )
-
-    #    mail.send(msg)
-    #    return True
+        # Simulate sending: write to logs (Render friendly)
+        print("📧 [SIMULATED INVITE EMAIL]")
+        print("To:", recipient_email)
+        print("Subject:", subject)
+        print("Body:\\n", body)
+        return True
 
     except Exception as e:
-        # Optional: log the exact error for debugging
-        print(f"❌ Email send failed: {e}")
+        print(f"❌ send_invite_email failed: {e}")
         return False
- 
+
+
 def send_final_approval_email(recipient_email, society_name):
-    """
-    Sends the final approval email after registration is successfully submitted.
-    """
-    subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
-    
-    body = f"""
-Dear Admin of {society_name},
+    """Send final approval email (simulation)."""
+    try:
+        subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
+        body = f"""Dear Admin of {society_name},
 
 We are pleased to inform you that your registration request for '{society_name}' has been officially approved.
 
 You can now log in to the system using the credentials you created during submission.
 
-Log in URL: http://localhost/system-entry
+Log in URL: https://siva-admins-registration.onrender.com/system-entry
 
 If you have any questions, please feel free to contact us.
 
@@ -163,21 +163,22 @@ Sincerely,
 SIVA Admin Team.
 """
 
-    try:
-        msg = Message(subject=subject, recipients=[recipient_email], body=body)
-        mail.send(msg)
+        print("📧 [SIMULATED FINAL APPROVAL EMAIL]")
+        print("To:", recipient_email)
+        print("Subject:", subject)
+        print("Body:\\n", body)
         return True
+
     except Exception as e:
+        print(f"❌ send_final_approval_email failed: {e}")
         return False
- 
+
+
 def send_rejection_email(recipient_email, society_name, reason=None):
-    """
-    Sends an email to the admin if the registration request is rejected.
-    """
-    subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
-    
-    body = f"""
-Dear Admin of {society_name},
+    """Send rejection email (simulation)."""
+    try:
+        subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
+        body = f"""Dear Admin of {society_name},
 
 We regret to inform you that your registration request for '{society_name}' has been rejected.
 
@@ -188,11 +189,15 @@ If you have any questions or believe this was a mistake, please contact the syst
 Sincerely,
 SIVA Admin Team.
 """
-    try:
-        msg = Message(subject=subject, recipients=[recipient_email], body=body)
-        mail.send(msg)
+
+        print("📧 [SIMULATED REJECTION EMAIL]")
+        print("To:", recipient_email)
+        print("Subject:", subject)
+        print("Body:\\n", body)
         return True
+
     except Exception as e:
+        print(f"❌ send_rejection_email failed: {e}")
         return False
  
 def generate_invite_from_request(request_data, conn):
