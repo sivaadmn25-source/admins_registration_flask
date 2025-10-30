@@ -130,7 +130,7 @@ def send_email_resend(to_email, subject, body):
         }
 
         payload = {
-            "from": "SIVA Admin <siva.admn25@gmail.com",
+            "from": "SIVA Admin <siva.admn25@gmail.com>",
             "to": [to_email],
             "subject": subject,
             "text": body
