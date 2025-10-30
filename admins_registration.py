@@ -123,7 +123,7 @@ def send_email_brevo(to_email, subject, body):
         return True
 
     # Properly wrap and encode body for Brevo
-    html_body = f"<html><body style='font-family:Arial,sans-serif;white-space:pre-line;'>{body}</body></html>"
+    send_html_body = f"<html><body><pre style='font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;'>{body}</pre></body></html>"
 
     try:
         url = "https://api.brevo.com/v3/smtp/email"
