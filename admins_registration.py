@@ -34,12 +34,12 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 
 # --- EMAIL CONFIGURATION ---
 app.config.update(
-    MAIL_SERVER=os.getenv('MAIL_SERVER'),
+    MAIL_SERVER=os.getenv('MAIL_SERVER', 'smtp.gmail.com'),
     MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
     MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', 'on', '1'],
     MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
     MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
-    MAIL_DEFAULT_SENDER=os.getenv('MAIL_SENDER', os.getenv('MAIL_USERNAME'))
+    MAIL_DEFAULT_SENDER=os.getenv('MAIL_USERNAME')  # ✅ ensure sender is set
 )
 
 mail = Mail(app)
@@ -131,7 +131,7 @@ The Election Management System Team
             subject=subject,
             recipients=[recipient_email],
             body=body,
-            sender=app.config.get("MAIL_SENDER", "noreply@example.com")
+            sender=app.config["MAIL_DEFAULT_SENDER"]
         )
 
         mail.send(msg)
