@@ -803,10 +803,13 @@ def open_invite():
    
 @app.route('/logout')
 def logout():
-    """Handles user logout by clearing the session."""
-    session.pop('user_id', None) 
+    """Handles user logout by clearing the session and preventing cached back navigation."""
+    session.clear()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('super_admin_dashboard'))
+    response = redirect(url_for('login'))  # redirect to login instead of dashboard
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 @app.route('/super_admin/approve/<string:society_name>', methods=['POST'])
 @admin_required
