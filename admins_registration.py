@@ -42,6 +42,8 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 #    MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
 #    MAIL_DEFAULT_SENDER=os.getenv('MAIL_USERNAME')  # ✅ ensure sender is set
 #)
+RESEND_API_URL = "https://api.resend.com/emails"
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 #mail = Mail(app)
 EMAIL_FROM = os.getenv('MAIL_USERNAME')
@@ -111,11 +113,46 @@ def get_db_conn():
 # --- Email Sending Functions (No change here, standard Flask-Mail) ---
 # --- Email Sending Functions (SIMULATED for Render; no SMTP) ---
 
+def send_email_resend(to_email, subject, body):
+    """Send email using Resend API if API key is set."""
+    if not RESEND_API_KEY:
+        # Simulation mode
+        print("📧 [SIMULATED EMAIL - NO RESEND KEY FOUND]")
+        print("To:", to_email)
+        print("Subject:", subject)
+        print("Body:\n", body)
+        return True
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "from": "SIVA Admin <no-reply@siva-admin.com>",
+            "to": [to_email],
+            "subject": subject,
+            "text": body
+        }
+
+        response = requests.post(RESEND_API_URL, headers=headers, json=payload)
+
+        if response.status_code in (200, 201):
+            print(f"✅ Email sent to {to_email}")
+            return True
+        else:
+            print(f"❌ Resend API failed: {response.status_code}, {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ send_email_resend exception: {e}")
+        return False
+
 def send_invite_email(recipient_email, society_name, invite_token, registration_link):
-    """Send the registration invitation email (simulation; prints to logs)."""
-    try: 
-        subject = f"Registration Invitation for {society_name}"
-        body = f"""Dear Admin of {society_name},
+    """Send registration invitation email (Resend or simulate)."""
+    subject = f"Registration Invitation for {society_name}"
+    body = f"""Dear Admin of {society_name},
 
 Your registration request has been approved!
 
@@ -128,24 +165,13 @@ This link is valid for 2 days. If you have any issues, please contact system sup
 Thank you,
 The Election Management System Team
 """
-
-        # Simulate sending: write to logs (Render friendly)
-        print("📧 [SIMULATED INVITE EMAIL]")
-        print("To:", recipient_email)
-        print("Subject:", subject)
-        print("Body:\n", body)
-        return True
-
-    except Exception as e:
-        print(f"❌ send_invite_email failed: {e}")
-        return False
+    return send_email_resend(recipient_email, subject, body)
 
 
 def send_final_approval_email(recipient_email, society_name):
-    """Send final approval email (simulation)."""
-    try:
-        subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
-        body = f"""Dear Admin of {society_name},
+    """Send final approval email (Resend or simulate)."""
+    subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
+    body = f"""Dear Admin of {society_name},
 
 We are pleased to inform you that your registration request for '{society_name}' has been officially approved.
 
@@ -158,23 +184,13 @@ If you have any questions, please feel free to contact us.
 Sincerely,
 SIVA Admin Team.
 """
-
-        print("📧 [SIMULATED FINAL APPROVAL EMAIL]")
-        print("To:", recipient_email)
-        print("Subject:", subject)
-        print("Body:\\n", body)
-        return True
-
-    except Exception as e:
-        print(f"❌ send_final_approval_email failed: {e}")
-        return False
+    return send_email_resend(recipient_email, subject, body)
 
 
 def send_rejection_email(recipient_email, society_name, reason=None):
-    """Send rejection email (simulation)."""
-    try:
-        subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
-        body = f"""Dear Admin of {society_name},
+    """Send rejection email (Resend or simulate)."""
+    subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
+    body = f"""Dear Admin of {society_name},
 
 We regret to inform you that your registration request for '{society_name}' has been rejected.
 
@@ -185,17 +201,8 @@ If you have any questions or believe this was a mistake, please contact the syst
 Sincerely,
 SIVA Admin Team.
 """
+    return send_email_resend(recipient_email, subject, body)
 
-        print("📧 [SIMULATED REJECTION EMAIL]")
-        print("To:", recipient_email)
-        print("Subject:", subject)
-        print("Body:\\n", body)
-        return True
-
-    except Exception as e:
-        print(f"❌ send_rejection_email failed: {e}")
-        return False
- 
 def generate_invite_from_request(request_data, conn):
     """Generates an invitation token, saves it to new_admins (as a placeholder invite), and updates request status."""
     token = secrets.token_urlsafe(32)
