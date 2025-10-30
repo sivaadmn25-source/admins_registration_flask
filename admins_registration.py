@@ -130,7 +130,7 @@ def send_email_resend(to_email, subject, body):
         }
 
         payload = {
-            "from": "SIVA Admin <no-reply@siva-admin.com>",
+            "from": "SIVA Admin <siva.admn25@gmail.com",
             "to": [to_email],
             "subject": subject,
             "text": body
@@ -139,11 +139,10 @@ def send_email_resend(to_email, subject, body):
         response = requests.post(RESEND_API_URL, headers=headers, json=payload)
 
         if response.status_code in (200, 201):
-            print(f"✅ Email sent to {to_email}")
-            return True
+            print(f"✅ Email sent to {to_email}") 
         else:
             print(f"❌ Resend API failed: {response.status_code}, {response.text}")
-            return False
+        return response.status_code in (200, 201)    
 
     except Exception as e:
         print(f"❌ send_email_resend exception: {e}")
