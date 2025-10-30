@@ -127,15 +127,15 @@ Thank you,
 The Election Management System Team
 """
 
-        msg = Message(
-            subject=subject,
-            recipients=[recipient_email],
-            body=body
+    #    msg = Message(
+    #        subject=subject,
+    #        recipients=[recipient_email],
+    #        body=body
         #    sender=app.config["MAIL_DEFAULT_SENDER"]
-        )
+    #    )
 
-        mail.send(msg)
-        return True
+    #    mail.send(msg)
+    #    return True
 
     except Exception as e:
         # Optional: log the exact error for debugging
