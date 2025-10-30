@@ -184,6 +184,9 @@ If you have any questions, please feel free to contact us.
 Sincerely,
 SIVA Admin Team.
 """
+    app.logger.info(f"Sending Final Approval Email: Subject: {subject}")
+    app.logger.info(f"Email Body:\n{body}"
+    
     return send_email_brevo(recipient_email, subject, body)
     
 def send_rejection_email(recipient_email, society_name, reason=None):
