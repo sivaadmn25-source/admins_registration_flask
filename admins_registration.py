@@ -125,7 +125,7 @@ def send_email_brevo(to_email, subject, body):
 
     # --- FIX 1: Convert plain text newlines (\n) to HTML line breaks (<br>)
     # This minimal conversion is required by the API/Email Clients for content rendering.
-    html_body = body.replace('\n', '<br>')
+    html_body = f"<html><body>{body.replace(chr(10), '<br>')}</body></html>"
     
     try:
         url = "https://api.brevo.com/v3/smtp/email"
@@ -765,7 +765,7 @@ def open_invite():
             ))
             
             conn.commit()
-            send_final_approval_email(email, society_name)
+           
             flash('Registration successful! Your application is under review.', 'success')
             return redirect(url_for('thank_you'))
 
