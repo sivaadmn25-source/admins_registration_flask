@@ -114,7 +114,7 @@ def get_db_conn():
 def send_email_brevo(to_email, subject, body):
     """Send email using Brevo API (fixed HTML and text content)."""
     brevo_api_key = os.getenv("BREVO_API_KEY")
-     
+    
     if not brevo_api_key:
         print("⚠️ No Brevo API key found — simulation mode.")
         print("To:", to_email)
@@ -123,7 +123,7 @@ def send_email_brevo(to_email, subject, body):
         return True
 
     # Properly wrap and encode body for Brevo
-    send_html_body = f"<html><body><pre style='font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;'>{body}</pre></body></html>"
+    html_body = f"<html><body style='font-family:Arial,sans-serif;white-space:pre-line;'>{body}</body></html>"
 
     try:
         url = "https://api.brevo.com/v3/smtp/email"
@@ -141,7 +141,7 @@ def send_email_brevo(to_email, subject, body):
             "textContent": body,
             "htmlContent": html_body
         }
- 
+
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code in (200, 201):
             print(f"✅ Email sent to {to_email} via Brevo")
