@@ -177,7 +177,7 @@ The Election Management System Team
 
 
 def send_final_approval_email(recipient_email, society_name):
-    """Send final approval email (Resend or simulate)."""
+    """Send the final approval email after society approval."""
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
     body = f"""Dear Admin of {society_name},
 
@@ -191,12 +191,17 @@ If you have any questions, please feel free to contact us.
 
 Sincerely,
 SIVA Admin Team.
-""".strip() # <-- FIX 2B: Added .strip() to clean string
-    app.logger.info(f"Sending Final Approval Email: Subject: {subject}")
-    app.logger.info(f"Email Body:\n{body}")
-    
-    return send_email_brevo(recipient_email, subject, body)
-    
+""".strip()
+
+    # Assuming `send_email_brevo` sends the email and returns a success flag or raises an error
+    try:
+        result = send_email_brevo(recipient_email, subject, body)
+        return True if result else False
+    except Exception as e:
+        # Handle email sending errors
+        flash(f"🚨 Error while sending email: {e}", 'error')
+        return False
+   
 def send_rejection_email(recipient_email, society_name, reason=None):
     """Send rejection email (Resend or simulate)."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
@@ -846,11 +851,12 @@ def logout():
 @admin_required
 def approve_society(society_name):
     """Approves a society that has submitted its details."""
-    conn = get_db_conn()
+    conn = get_db_conn()  # Get database connection
     
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
+        # Retrieve society details from the database
         cursor.execute("""
             SELECT 
                 society_name, role, password_hash, max_voters, housing_type, 
@@ -865,10 +871,12 @@ def approve_society(society_name):
 
         new_society = cursor.fetchone()
 
+        # Check if society exists or if already processed
         if not new_society:
             flash("🚨 Error: Submitted details not found or already processed for approval.", 'error')
             return redirect(url_for('super_admin_dashboard'))
 
+        # Insert into admins table
         admin_insert_tuple = (
             new_society['society_name'], 
             'admin', 
@@ -883,6 +891,7 @@ def approve_society(society_name):
             ON CONFLICT (society_name, role) DO NOTHING;
         """, admin_insert_tuple)
 
+        # Insert into settings table
         cursor.execute("""
             INSERT INTO settings (society_name, max_voters, is_towerwise, housing_type, vote_per_house)
             VALUES (%s, %s, %s, %s, %s)
@@ -895,6 +904,7 @@ def approve_society(society_name):
             new_society['vote_per_house']
         ))
 
+        # Update new_admins table to mark the society as approved
         cursor.execute("""
             UPDATE new_admins 
             SET review_status = 'approved',
@@ -902,12 +912,15 @@ def approve_society(society_name):
             WHERE society_name = %s;
         """, (society_name,))
 
-        conn.commit()
+        conn.commit()  # Commit changes to the database
 
-        # ✅ Send the final approval email AFTER commit
+        # ✅ Send the final approval email after commit
         email_sent = send_final_approval_email(new_society['email'], new_society['society_name'])
 
-        flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system. Final email sent!", 'success')
+        if email_sent:
+            flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system. Final email sent!", 'success')
+        else:
+            flash(f"🚨 Error: Final approval email could not be sent to '{society_name}'.", 'error')
 
     except psycopg2.IntegrityError as e:
         if conn: conn.rollback()
@@ -918,9 +931,9 @@ def approve_society(society_name):
 
     finally:
         if conn: conn.close()
-    
-    return redirect(url_for('super_admin_dashboard'))
 
+    return redirect(url_for('super_admin_dashboard'))
+  
 @app.route('/super_admin/reject/<string:society_name>', methods=['POST'])
 @admin_required
 def reject_society(society_name):
