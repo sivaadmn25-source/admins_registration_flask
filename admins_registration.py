@@ -125,8 +125,7 @@ def send_email_brevo(to_email, subject, body):
 
     # --- FIX 1: Convert plain text newlines (\n) to HTML line breaks (<br>)
     # This minimal conversion is required by the API/Email Clients for content rendering.
-    html_body = f"<html><body>{body.replace(chr(10), '<br>')}</body></html>"
-
+    html_body = f"<html><body>{body.replace('\r\n', '<br>').replace('\n', '<br>')}</body></html>"
     
     try:
         url = "https://api.brevo.com/v3/smtp/email"
