@@ -185,8 +185,7 @@ Sincerely,
 SIVA Admin Team.
 """
     return send_email_brevo(recipient_email, subject, body)
-
-
+    
 def send_rejection_email(recipient_email, society_name, reason=None):
     """Send rejection email (Resend or simulate)."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
@@ -806,9 +805,14 @@ def logout():
     """Handles user logout by clearing the session and preventing cached back navigation."""
     session.clear()
     flash('You have been logged out.', 'info')
-    response = redirect(url_for('login'))  # redirect to login instead of dashboard
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+
+    response = redirect(url_for('login'))  # redirect to login dialog page
+
+    # Strong anti-cache headers
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
     response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
     return response
 
 @app.route('/super_admin/approve/<string:society_name>', methods=['POST'])
@@ -822,7 +826,8 @@ def approve_society(society_name):
 
         cursor.execute("""
             SELECT 
-                society_name, role, password_hash, max_voters, housing_type, is_towerwise, vote_per_house, mobile_number, email 
+                society_name, role, password_hash, max_voters, housing_type, 
+                is_towerwise, vote_per_house, mobile_number, email 
             FROM 
                 new_admins 
             WHERE 
@@ -840,7 +845,7 @@ def approve_society(society_name):
         admin_insert_tuple = (
             new_society['society_name'], 
             'admin', 
-            new_society['password_hash'], # Hashed password (bytes) is transferred
+            new_society['password_hash'],
             new_society['max_voters'], 
             new_society['housing_type']
         )
@@ -870,8 +875,12 @@ def approve_society(society_name):
             WHERE society_name = %s;
         """, (society_name,))
 
-        conn.commit() 
-        flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system.", 'success')
+        conn.commit()
+
+        # ✅ Send the final approval email AFTER commit
+        send_final_approval_email(new_society['email'], new_society['society_name'])
+
+        flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system. Final email sent!", 'success')
 
     except psycopg2.IntegrityError as e:
         if conn: conn.rollback()

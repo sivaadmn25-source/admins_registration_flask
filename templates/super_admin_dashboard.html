@@ -429,86 +429,88 @@
         
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<!-- ✅ Core JS Libraries -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
-    <script>
-        // Existing script for copying invitation links
-        document.querySelectorAll('.invite-link-input').forEach(input => {
-            input.addEventListener('click', function() {
-                this.select();
-                document.execCommand('copy');
-                const original = this.value;
-                this.value = '✅ Link Copied!';
-                this.classList.add('copy-success');
-                setTimeout(() => {
-                    this.value = original;
-                    this.classList.remove('copy-success');
-                }, 1000);
-            });
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    /* -------------------------------
+       1️⃣ Copy Invitation Link Logic
+    --------------------------------*/
+    document.querySelectorAll('.invite-link-input').forEach(input => {
+        input.addEventListener('click', function() {
+            this.select();
+            document.execCommand('copy');
+            const original = this.value;
+            this.value = '✅ Link Copied!';
+            this.classList.add('copy-success');
+            setTimeout(() => {
+                this.value = original;
+                this.classList.remove('copy-success');
+            }, 1000);
         });
+    });
 
-        // NEW SCRIPT for Master Erase Modal Logic (FIXED)
-   // NEW SCRIPT for Master Erase Modal Logic (UPDATED FOR DROPDOWN)
-    document.addEventListener('DOMContentLoaded', function() {
-    const societySelectorDropdown = document.getElementById('societySelectorDropdown'); // NEW
-    const eraseTriggerButton = document.getElementById('eraseTriggerButton');         // NEW
-    
+    /* -------------------------------
+       2️⃣ Master Erase Modal Logic
+    --------------------------------*/
+    const societySelectorDropdown = document.getElementById('societySelectorDropdown');
+    const eraseTriggerButton = document.getElementById('eraseTriggerButton');
     const societyNameConfirmationInput = document.getElementById('societyNameConfirmation');
     const finalEraseButton = document.getElementById('finalEraseButton');
     const hiddenSocietyNameInput = document.getElementById('hiddenSocietyName');
     const societyNamePlaceholder = document.getElementById('societyNamePlaceholder');
-    
-    // 1. Enable/Disable trigger button based on dropdown selection
+
+    // Enable trigger button based on dropdown selection
     if (societySelectorDropdown && eraseTriggerButton) {
         societySelectorDropdown.addEventListener('change', function() {
-            if (this.value) {
-                eraseTriggerButton.disabled = false;
-            } else {
-                eraseTriggerButton.disabled = true;
-            }
+            eraseTriggerButton.disabled = !this.value;
+        });
+    }
+ 
+    // Setup modal before showing
+    $('#eraseConfirmModal').on('show.bs.modal', function () {
+        const selectedSociety = societySelectorDropdown ? societySelectorDropdown.value : '';
+        societyNameConfirmationInput.value = ''; 
+        finalEraseButton.disabled = true; 
+        societyNamePlaceholder.textContent = selectedSociety;
+        hiddenSocietyNameInput.value = selectedSociety;
+    });
+
+    // Enable erase button when names match
+    if (societyNameConfirmationInput) {
+        societyNameConfirmationInput.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+            const societyName = hiddenSocietyNameInput.value;
+            finalEraseButton.disabled = (this.value !== societyName);
         });
     }
 
-    // 2. Setup the modal when the trigger button is clicked
-    $('#eraseConfirmModal').on('show.bs.modal', function (event) {
-        // CRITICAL FIX: Get the society name from the DROPDOWN VALUE
-        const selectedSociety = societySelectorDropdown ? societySelectorDropdown.value : '';
-        
-        // Reset confirmation inputs and button
-        societyNameConfirmationInput.value = '';
-        finalEraseButton.disabled = true;
-        
-        // Set values in the modal
-        societyNamePlaceholder.textContent = selectedSociety;
-        hiddenSocietyNameInput.value = selectedSociety; // Set the value to be submitted
+    /* -------------------------------
+       3️⃣ Tooltip + Right-Click Disable
+    --------------------------------*/
+    $('[data-toggle="tooltip"]').tooltip();
+
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
     });
 
-    // 3. Enable/Disable the final erase button based on typed confirmation
-    societyNameConfirmationInput.addEventListener('input', function() {
-        // Force input to be uppercase to match society name format (convention)
-        this.value = this.value.toUpperCase(); 
+    /* -------------------------------
+       4️⃣ Prevent Browser Back After Logout
+    --------------------------------*/
+    if (window.history && window.history.pushState) {
+        window.history.pushState(null, null, window.location.href);
+        window.onpopstate = function () {
+            window.history.go(1);
+        };
+    }
 
-        const societyName = hiddenSocietyNameInput.value;
-        // Check if the input exactly matches the society name set in the hidden field
-        if (this.value === societyName) {
-            finalEraseButton.disabled = false;
-        } else {
-            finalEraseButton.disabled = true;
-        }
-    });
 });
-        document.addEventListener('DOMContentLoaded', function() {
-            // Enable Bootstrap tooltips
-            $('[data-toggle="tooltip"]').tooltip();
+</script>
 
-            // Disable right-click (context menu)
-            document.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-            });
-        });
-    </script>
     <footer class="fixed-bottom text-center text-muted" style="font-size: 1rem; padding: 10px; background-color: #f4f7f6; z-index: 1000;">
         D3 by: 
         <a href="mailto:siva.admn25@gmail.com" style="color: #0000FF; text-decoration: underline;" class="hover:text-blue-700">
