@@ -1,6 +1,6 @@
 Flask
 Flask-Login
-Flask-Mail
+#Flask-Mail
 psycopg2-binary
 python-dotenv
 bcrypt
@@ -11,3 +11,4 @@ Pillow
 numpy
 werkzeug
 gunicorn
+requests
