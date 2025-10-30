@@ -112,10 +112,9 @@ def get_db_conn():
 
 # --- Email Sending Functions (No change here, standard Flask-Mail) --- 
 def send_email_brevo(to_email, subject, body):
-    """Send email using Brevo API."""
+    """Send email using Brevo API (fixed HTML and text content)."""
     brevo_api_key = os.getenv("BREVO_API_KEY")
-    
-    # Simulate if no API key found (for debugging)
+     
     if not brevo_api_key:
         print("⚠️ No Brevo API key found — simulation mode.")
         print("To:", to_email)
@@ -123,28 +122,26 @@ def send_email_brevo(to_email, subject, body):
         print("Body:\n", body)
         return True
 
-    # --- FIX 1: Convert plain text newlines (\n) to HTML line breaks (<br>)
-    # This minimal conversion is required by the API/Email Clients for content rendering.
-    html_body = f"<html><body>{body.replace('\r\n', '<br>').replace('\n', '<br>')}</body></html>"
-    
+    # Properly wrap and encode body for Brevo
+    html_body = f"<html><body style='font-family:Arial,sans-serif;white-space:pre-line;'>{body}</body></html>"
+
     try:
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
             "api-key": brevo_api_key
-        } 
-        
-        # --- MODIFIED PAYLOAD ---
+        }
+
         payload = {
             "sender": {"name": "SIVA Admin", "email": "siva.admn25@gmail.com"},
             "to": [{"email": to_email}],
             "subject": subject,
-            "textContent": body,  # Plain text content
-            "htmlContent": html_body  # HTML formatted content
+            # 💡 IMPORTANT: Include both text and html content explicitly
+            "textContent": body,
+            "htmlContent": html_body
         }
-        # --------------------------
-
+ 
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code in (200, 201):
             print(f"✅ Email sent to {to_email} via Brevo")
