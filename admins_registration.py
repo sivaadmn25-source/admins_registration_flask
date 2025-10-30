@@ -110,12 +110,12 @@ def get_db_conn():
         # Since app.logger is not available in all contexts, raising a custom error or printing is necessary
         raise ConnectionError("Could not connect to the database. Check .env settings.")
 
-# --- Email Sending Functions (No change here, standard Flask-Mail) ---
-# --- Email Sending Functions (SIMULATED for Render; no SMTP) ---
-
+# --- Email Sending Functions (No change here, standard Flask-Mail) --- 
 def send_email_brevo(to_email, subject, body):
     """Send email using Brevo API."""
     brevo_api_key = os.getenv("BREVO_API_KEY")
+    
+    # Simulate if no API key found (for debugging)
     if not brevo_api_key:
         print("⚠️ No Brevo API key found — simulation mode.")
         print("To:", to_email)
@@ -140,8 +140,8 @@ def send_email_brevo(to_email, subject, body):
             "sender": {"name": "SIVA Admin", "email": "siva.admn25@gmail.com"},
             "to": [{"email": to_email}],
             "subject": subject,
-            "textContent": body,      
-            "htmlContent": html_body  # <--- CRITICAL ADDITION for body visibility
+            "textContent": body,  # Plain text content
+            "htmlContent": html_body  # HTML formatted content
         }
         # --------------------------
 
@@ -172,13 +172,14 @@ This link is valid for 2 days. If you have any issues, please contact system sup
 
 Thank you,
 The Election Management System Team
-""".strip() # <-- FIX 2A: Added .strip() to clean string
+""".strip()  # <-- FIX 2A: Added .strip() to clean string
+    
     return send_email_brevo(recipient_email, subject, body)
-
-
+ 
 def send_final_approval_email(recipient_email, society_name):
     """Send the final approval email after society approval."""
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
+    
     body = f"""Dear Admin of {society_name},
 
 We are pleased to inform you that your registration request for '{society_name}' has been officially approved.
@@ -193,15 +194,17 @@ Sincerely,
 SIVA Admin Team.
 """.strip()
 
-    # Assuming `send_email_brevo` sends the email and returns a success flag or raises an error
+    # Debugging step: Print out the body to make sure it has content
+    print(f"Email Body:\n{body}")  # <-- This will print the body content in your terminal or logs
+
+    # Continue with sending the email
     try:
         result = send_email_brevo(recipient_email, subject, body)
         return True if result else False
-    except Exception as e:
-        # Handle email sending errors
+    except Exception as e: 
         flash(f"🚨 Error while sending email: {e}", 'error')
         return False
-   
+
 def send_rejection_email(recipient_email, society_name, reason=None):
     """Send rejection email (Resend or simulate)."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
@@ -215,23 +218,8 @@ If you have any questions or believe this was a mistake, please contact the syst
 
 Sincerely,
 SIVA Admin Team.
-""".strip() # <-- FIX 2C: Added .strip() to clean string
-    return send_email_brevo(recipient_email, subject, body)
-  
-def send_rejection_email(recipient_email, society_name, reason=None):
-    """Send rejection email (Resend or simulate)."""
-    subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
-    body = f"""Dear Admin of {society_name},
-
-We regret to inform you that your registration request for '{society_name}' has been rejected.
-
-{f"Reason: {reason}" if reason else ""}
-
-If you have any questions or believe this was a mistake, please contact the system support team.
-
-Sincerely,
-SIVA Admin Team.
-"""
+""".strip()  # <-- FIX 2C: Added .strip() to clean string
+    
     return send_email_brevo(recipient_email, subject, body)
 
 def generate_invite_from_request(request_data, conn):
@@ -542,7 +530,7 @@ def erase_society():
         return redirect(url_for('super_admin_dashboard'))
     
 @app.route('/approve_request/<int:request_id>', methods=['POST'])
-@admin_required 
+@admin_required
 def approve_request(request_id):
     conn = None
     try:
@@ -568,13 +556,8 @@ def approve_request(request_id):
             return redirect(url_for('super_admin_dashboard'))
 
         # --- TRIM INVITE_ PREFIX FROM SOCIETY NAME ---
-        society_name_with_prefix = request_data['society_name']
-        clean_society_name = (
-            society_name_with_prefix.removeprefix('INVITE_')
-            if society_name_with_prefix and society_name_with_prefix.startswith('INVITE_')
-            else society_name_with_prefix
-        )
         clean_society_name = request_data['society_name'].removeprefix('INVITE_')
+
         # --- GENERATE INVITE TOKEN USING CLEAN NAME ---
         invite_token = generate_invite_from_request(
             {**dict(request_data), 'society_name': clean_society_name},
@@ -583,14 +566,13 @@ def approve_request(request_id):
         conn.commit()
 
         # --- SEND EMAIL WITH CLEAN NAME (FIXED URL) ---
-        # CRITICAL FIX: Generate the FULL dynamic link using url_for.
         registration_link = url_for('open_invite', token=invite_token, _external=True)
 
         email_sent = send_invite_email(
             request_data['email'],
             clean_society_name,
-            invite_token, # Keep this argument
-            registration_link # Pass the full, dynamic link as the final argument
+            invite_token, # Pass the generated token
+            registration_link # Pass the full dynamic URL as the final argument
         )
 
         email_status = (
@@ -602,10 +584,9 @@ def approve_request(request_id):
         flash(
             f"✅ Approved request for **{clean_society_name}**.<br>"
             f"Invite Link: <a href='{registration_link}' target='_blank'>{registration_link}</a><br>"
-           # f"Email Status: {email_status}",
+            f"Email Status: {email_status}",
             'success'
         )
-
 
     except Exception as e:
         app.logger.error(f"Approval error for request {request_id}: {e}")
@@ -618,9 +599,9 @@ def approve_request(request_id):
             conn.close()
 
     return redirect(url_for('super_admin_dashboard'))
- 
+
 @app.route('/reject_request/<int:request_id>', methods=['POST'])
-@admin_required 
+@admin_required
 def reject_request(request_id):
     conn = None
     try:
@@ -656,14 +637,16 @@ def reject_request(request_id):
 
     except Exception as e:
         # app.logger.error(f"Rejection error for request {request_id}: {e}")
-        if conn: conn.rollback()
+        if conn:
+            conn.rollback()
         flash('An error occurred during rejection.', 'error')
-        
+
     finally:
-        if conn: conn.close()
-    
+        if conn: 
+            conn.close()
+
     return redirect(url_for('super_admin_dashboard'))
- 
+
 @app.route('/register_request', methods=['GET', 'POST'])
 def register_request():
     """Handles the public display and submission of the registration request form."""
@@ -685,7 +668,7 @@ def register_request():
         try:
             with conn.cursor() as cur:
                 # Check for duplicate society_name or email
-                cur.execute("""
+                cur.execute(""" 
                     SELECT society_name, email 
                     FROM registration_requests 
                     WHERE (society_name = %s OR email = %s) 
@@ -702,7 +685,7 @@ def register_request():
                     return redirect(url_for('register_request'))
                 
                 # Insert new request
-                cur.execute("""
+                cur.execute(""" 
                     INSERT INTO registration_requests (society_name, email, mobile_number) 
                     VALUES (%s, %s, %s)
                 """, (society_name, email, mobile_number))
@@ -713,7 +696,8 @@ def register_request():
             
         except (Exception, psycopg2.DatabaseError) as e:
             # app.logger.error(f"Registration request submission error: {e}")
-            if conn: conn.rollback()
+            if conn:
+                conn.rollback()
             flash('An error occurred during submission. Please try again.', 'error')
             
         finally:
@@ -721,7 +705,7 @@ def register_request():
     
     # For GET requests, render the registration page
     return render_template('register_request.html')
- 
+
 @app.route('/register', methods=['GET', 'POST'])
 def open_invite():
     token = request.args.get('token') or request.form.get('token')
