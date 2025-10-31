@@ -488,7 +488,7 @@ def erase_society():
         conn.autocommit = False 
 
         # Whitelist tables for safety
-        simple_delete_tables = ['admins', 'households', 'new_admins', 'settings']
+        simple_delete_tables = ['admins', 'households', 'new_admins', 'settings', 'registration_requests']
         conditional_delete_tables = {'votes': "is_archived = 0"}
         
         deleted_count = 0
