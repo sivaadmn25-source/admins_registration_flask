@@ -183,7 +183,7 @@ We are pleased to inform you that your registration request for '{society_name}'
 
 You can now log in to the system using the credentials you created during submission.
 
-Log in URL: https://siva-admins-registration.onrender.com/system-entry
+Log in URL: https://siva-admin-activities.onrender.com/system-entry
 
 If you have any questions, please feel free to contact us.
 
