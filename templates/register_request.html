@@ -26,8 +26,8 @@
             margin: 20px auto; 
         }
         .register-card .card-header {
-            /* FIXED: Gradient saffron instead of tri-color */
-            background: linear-gradient(to bottom, #FF9933 50%, #F9F9F9 50%);
+            /* Tri-color theme for header */
+            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #FF9933 100%);
             color: #000080;
             border-top-left-radius: 10px;
             border-top-right-radius: 10px;
@@ -40,12 +40,7 @@
             align-items: center; 
             font-size: clamp(1.2rem, 4vw, 1.5rem); 
         }
-
-        /* FIXED: Ashoka Chakra is hidden */
-        .ashoka-chakra {
-            display: none;
-        }
-
+        
         /* Container for text: ensures horizontal alignment and no wrapping */
         .header-text-container {
             display: flex; 
@@ -55,28 +50,7 @@
             white-space: nowrap; 
             line-height: 1; 
         }
-
-        /* FIXED: SIVA STYLING & ANIMATIONS (RETAINED) */
-        .siva-text {
-            font-weight: 900;
-            font-size: 1.8em; 
-            background: linear-gradient(270deg, gold, orange, yellow, green, blue, indigo, violet, gold);
-            background-size: 400% 100%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
-            margin-left: 6px;
-            white-space: nowrap;
-            animation: rainbow 6s ease infinite;
-        }
-
-        @keyframes rainbow {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        /* End SIVA Styling */
-
+        
         /* --- BUTTONS AND LINKS --- */
         .register-card .btn-primary {
             background-color: #000080;
@@ -97,8 +71,34 @@
             color: #0056b3;
             text-decoration: underline;
         }
+        
+        /* --- SIVA STYLING & ANIMATIONS --- */
+        .siva-text {
+            font-weight: 900;
+            font-size: 1.8em; /* INCREASED from 1.5em to 1.8em */
+            background: linear-gradient(270deg, gold, orange, yellow, green, blue, indigo, violet, gold);
+            background-size: 400% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
+            margin-left: 6px;
+            white-space: nowrap;
+            animation: rainbow 6s ease infinite;
+        }
 
-        /* --- FOOTER STYLING --- */
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* --- END SIVA STYLING --- */
+
+        /* --- FOOTER STYLING (NEW) --- */
         .card-body footer {
             margin-top: 20px;
             padding-top: 10px;
@@ -107,42 +107,44 @@
             font-size: 0.9em;
             color: #6c757d;
         }
+        
     </style>
 </head>
 <body>
-    <div class="register-card">
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; z-index: 1000;">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'info') }} mb-3">
+            {{ message }}
+          </div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="register-card card">
         <div class="card-header">
-            <div class="header-text-container">
-                Society Pre-Registration Request <span class="siva-text">SIVA</span>
-            </div>
+            <span class="header-text-container">
+                Society Pre-Registration
+                <span class="siva-text">SIVA</span>
+            </span>
         </div>
         <div class="card-body">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'warning') }}" role="alert">
-                    {{ message }}
-                  </div>
-                {% endfor %}
-              {% endif %}
-            {% endwith %}
-
-            <p class="text-info">
-                Please submit the details of the society's administrator to initiate the registration process.
-            </p>
-
-            <form method="POST">
+            <p class="text-muted text-center">Submit contact details to request an invitation link for your society.</p>
+            
+            <form method="POST" action="{{ url_for('register_request') }}">
+                
                 <div class="form-group">
-                    <label for="society_name">Society Name (Unique Identifier)</label>
-                    <input type="text" class="form-control" id="society_name" name="society_name" required placeholder="e.g., SRGF, MATA" style="text-transform: uppercase;">
-                    <small class="form-text text-muted">
-                        This name is used for the application's unique ID.
-                    </small>
+                    <label for="society_name">Society/Community Name</label>
+                    <input type="text" class="form-control" id="society_name" name="society_name" 
+                           required oninput="this.value = this.value.toUpperCase()">
                 </div>
 
                 <div class="form-group">
-                    <label for="email">Admin Email (Unique)</label>
-                    <input type="email" class="form-control" id="email" name="email" required placeholder="e.g., admin@yoursociety.com">
+                    <label for="email">Admin Email (for Invitation Link)</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
                 </div>
 
                 <div class="form-group">
@@ -161,7 +163,7 @@
                 </p>
             </footer>
             
-		</div>
+            </div>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
@@ -172,7 +174,7 @@
             // Enable Bootstrap tooltips
             $('[data-toggle="tooltip"]').tooltip();
 
-            // FIXED: Right-click prohibition script is RESTORED
+            // Disable right-click (context menu)
             document.addEventListener('contextmenu', function(e) {
                 e.preventDefault();
             });
