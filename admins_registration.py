@@ -863,12 +863,13 @@ def approve_society(society_name):
             'admin', 
             new_society['password_hash'],
             new_society['max_voters'], 
-            new_society['housing_type']
+            new_society['housing_type'],
+            new_society['email']
         )
 
         cursor.execute("""
-            INSERT INTO admins (society_name, role, password_hash, max_voters, housing_type)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO admins (society_name, role, password_hash, max_voters, housing_type, email)
+            VALUES (%s, %s, %s, %s, %s,%s)
             ON CONFLICT (society_name, role) DO NOTHING;
         """, admin_insert_tuple)
 
