@@ -12,6 +12,7 @@ import secrets
 import pytz 
 #from flask_mail import Mail, Message 
 import requests
+from flask import make_response
 # -------------------------
 
 # Define your local timezone (assuming IST)
@@ -309,25 +310,24 @@ def super_admin_dashboard():
     user = get_current_user()
     is_authenticated = user is not None
     ensure_super_admin_exists()
-    session['user_id'] = SYSTEM_ADMIN_ID
-    
+     
     # --- STEP 1: HANDLE LOGIN POST REQUEST ---
     if request.method == 'POST' and not is_authenticated:
         password = request.form.get('password')
-        
-        conn = None
+        conn = None 
         user_record = None
         
         try:
             conn = get_db_conn()
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-            cursor.execute("SELECT society_name, password_hash, role FROM admins WHERE society_name = %s;", (SYSTEM_ADMIN_ID,))
+            cursor.execute(
+                "SELECT society_name, password_hash, role FROM admins WHERE society_name = %s;", 
+                (SYSTEM_ADMIN_ID,)
+            )
             user_record = cursor.fetchone()
-
-        except Exception as e:
+        except Exception as e: 
             flash(f'Database error during login: {e}', 'error')
-            return render_template('super_admin_dashboard.html', is_authenticated=False)
+            resp = make_response(render_template('super_admin_dashboard.html', is_authenticated=False))
         finally:
             if conn: conn.close()
 
@@ -340,18 +340,23 @@ def super_admin_dashboard():
                 return redirect(next_page or url_for('super_admin_dashboard'))
 
         flash('Invalid Password.', 'error')
-        return render_template('super_admin_dashboard.html', is_authenticated=False)
+        resp = make_response(render_template('super_admin_dashboard.html', is_authenticated=False))
+
+        # Anti-cache headers for login page
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
 
     # --- STEP 2: HANDLE AUTHENTICATED REQUESTS (GET or POST for invite creation) ---
-    if is_authenticated:
-        
+    if is_authenticated: 
         conn = None
         pending_approvals = [] 
         active_invites = []    
         pending_requests = []
         societies = [] 
         
-        # Handle POST for Invitation Creation (Existing Logic)
+        # Handle POST for Invitation Creation
         if request.method == 'POST':
             token = secrets.token_urlsafe(32) 
             dummy_society_name = f"PLACEHOLDER_{uuid.uuid4().hex[:8]}" 
@@ -362,8 +367,7 @@ def super_admin_dashboard():
             try:
                 conn = get_db_conn()
                 cursor = conn.cursor()
-                
-                cursor.execute("""
+                cursor.execute(""" 
                     INSERT INTO new_admins (
                         society_name, role, mobile_number, email, password_hash, invite_token, 
                         invite_end_at, max_voters, housing_type, review_status, is_towerwise
@@ -384,64 +388,49 @@ def super_admin_dashboard():
                 ))
                 conn.commit()
                 flash(f"✅ New invitation created. Token: {token[:8]}... Link generated.", 'success')
-                
-            except Exception as e:
+            except Exception as e: 
                 if conn: conn.rollback()
-                error_msg = f"DB INSERT FAILED: Check constraints/columns. Error: {e}"
-                flash(error_msg, 'error')
+                flash(f"DB INSERT FAILED: {e}", 'error')
             finally:
                 if conn: conn.close()
-        
-            return redirect(url_for('super_admin_dashboard'))
+            return redirect(url_for('super_admin_dashboard')) 
                 
         # Handle GET (View Dashboard Data)
         try:
             conn = get_db_conn()
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
             
-            # Fetch Pending Registration Requests
-            cursor.execute(
-                """SELECT id, society_name, email, mobile_number, submitted_at
-                   FROM registration_requests 
-                   WHERE status = 'pending' 
-                   ORDER BY submitted_at ASC"""
-            ) 
+            cursor.execute("""
+                SELECT id, society_name, email, mobile_number, submitted_at
+                FROM registration_requests 
+                WHERE status = 'pending' 
+                ORDER BY submitted_at ASC
+            """)
             pending_requests = cursor.fetchall()
             
-            # Fetch Pending Approvals (Existing Logic)
-            cursor.execute("""
-                SELECT 
-                    society_name, email, mobile_number, max_voters, housing_type, is_towerwise, responded_at
-                FROM 
-                    new_admins 
-                WHERE 
-                    review_status = 'submitted_for_review' 
-                AND 
-                    responded = TRUE
+            cursor.execute(""" 
+                SELECT society_name, email, mobile_number, max_voters, housing_type, is_towerwise, responded_at
+                FROM new_admins 
+                WHERE review_status = 'submitted_for_review' 
+                AND responded = TRUE
                 ORDER BY responded_at DESC;
             """)
             pending_approvals = cursor.fetchall()
             
-            # Fetch Active Invitations (Existing Logic)
-            cursor.execute("""
-                SELECT 
-                    society_name, invite_token, invited_at, invite_end_at, email
-                FROM 
-                    new_admins 
-                WHERE 
-                    responded = FALSE 
-                AND 
-                    review_status = 'new_invitation' 
+            cursor.execute(""" 
+                SELECT society_name, invite_token, invited_at, invite_end_at, email
+                FROM new_admins 
+                WHERE responded = FALSE 
+                AND review_status = 'new_invitation' 
                 ORDER BY invited_at DESC;
             """)
             active_invites = cursor.fetchall()
         
-            # Fetch societies for Master Erase dropdown
-            cursor.execute(
-                """SELECT DISTINCT society_name FROM new_admins 
-                   WHERE role = 'admin' 
-                   ORDER BY society_name;"""
-            )
+            cursor.execute("""
+                SELECT DISTINCT society_name FROM new_admins 
+                WHERE role = 'admin' 
+                ORDER BY society_name;
+            """)
             societies = [row[0] for row in cursor.fetchall()]
 
         except Exception as e:
@@ -450,10 +439,7 @@ def super_admin_dashboard():
         finally:
             if conn: conn.close()
 
-        # CRITICAL FIX: Base URL is now generated directly in the HTML using url_for
-        # Passing an empty string here to maintain the structure but rely on HTML fix
-        base_url = "" 
-
+        base_url = ""  
         return render_template('super_admin_dashboard.html', 
                                is_authenticated=True, 
                                pending_approvals=pending_approvals, 
@@ -464,8 +450,13 @@ def super_admin_dashboard():
 
     # --- STEP 3: HANDLE UNAUTHENTICATED GET REQUESTS ---
     else:
-        return render_template('super_admin_dashboard.html', is_authenticated=False)
- 
+        resp = make_response(render_template('super_admin_dashboard.html', is_authenticated=False))
+        # Anti-cache headers to prevent back button from showing cached dashboard
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
+
 @app.route('/super_admin/erase_society', methods=['POST'])
 @super_admin_required
 def erase_society():
@@ -831,13 +822,13 @@ def open_invite():
    
 @app.route('/logout')
 def logout():
-    """Handles user logout by clearing the session and preventing cached back navigation."""
+    """Handles superadmin logout and prevents cached back navigation."""
     session.clear()
     flash('You have been logged out.', 'info')
 
-    response = redirect(url_for('login'))  # redirect to login dialog page
+    response = redirect(url_for('super_admin_dashboard'))  # Redirect to superadmin login form
 
-    # Strong anti-cache headers
+    # Anti-cache headers
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
