@@ -730,12 +730,26 @@ def open_invite():
                 flash("All fields are required.", "error")
                 return redirect(url_for('open_invite', token=token))
 
-            # --- NO FIX: Hashing is preserved for new society admins ---
-            hashed_password = password
+            hashed_password = password  # preserve hashing logic
 
             conn = get_db_conn()
             cursor = conn.cursor()
-            
+
+            # --- Check if token already used ---
+            cursor.execute("""
+                SELECT review_status 
+                FROM new_admins 
+                WHERE invite_token = %s
+            """, (token,))
+            row = cursor.fetchone()
+            if not row:
+                flash("Invalid invitation token.", "error")
+                return redirect(url_for('register_request'))
+            elif row[0] != 'new_invitation':
+                flash("❌ This invitation token has already been used.", "error")
+                return redirect(url_for('register_request'))
+
+            # --- Proceed with registration ---
             cursor.execute("""
                 UPDATE new_admins 
                 SET 
@@ -750,19 +764,16 @@ def open_invite():
                     review_status = 'submitted_for_review',
                     responded = TRUE,
                     responded_at = CURRENT_TIMESTAMP
-                WHERE 
-                    invite_token = %s 
-                AND 
-                    review_status = 'new_invitation';
+                WHERE invite_token = %s
+                AND review_status = 'new_invitation';
             """, (
-                society_name, email, mobile, hashed_password, # Hashing preserved
+                society_name, email, mobile, hashed_password,
                 housing_type_selected, max_voters,
                 is_towerwise_flag, vote_per_house,
                 token
             ))
-            
-            conn.commit()
-           
+
+            conn.commit() 
             flash('Registration successful! Your application is under review.', 'success')
             return redirect(url_for('thank_you'))
 
@@ -773,36 +784,41 @@ def open_invite():
         finally:
             if conn:
                 conn.close()
-        
+
         return redirect(url_for('open_invite', token=token))
 
     # --- HANDLE PAGE LOAD (GET) ---
-    if request.method == 'GET':
-        conn = None
-        invite = None
+    if request.method == 'GET': 
         if not token:
             flash("No invitation token provided.", "error")
-            return redirect(url_for('super_admin_dashboard'))
+            return redirect(url_for('register_request'))
 
+        conn = None
+        invite = None
         try:
             conn = get_db_conn()
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
             cursor.execute("""
-                SELECT society_name, invite_token, invite_end_at, email 
+                SELECT society_name, invite_token, invite_end_at, email, review_status 
                 FROM new_admins 
-                WHERE invite_token = %s 
-                AND review_status = 'new_invitation';
+                WHERE invite_token = %s;
             """, (token,))
             invite = cursor.fetchone()
         except Exception as e:
             flash(f"Error fetching invite: {e}", "error")
+            return redirect(url_for('register_request'))
         finally:
             if conn:
                 conn.close()
 
         if not invite:
-            flash("Invalid, expired, or already used invitation link.", "error")
-            return redirect(url_for('super_admin_dashboard'))
+            flash("Invalid invitation link.", "error")
+            return redirect(url_for('register_request'))
+
+        # --- Check if token already used ---
+        if invite['review_status'] != 'new_invitation':
+            flash("❌ This invitation token has already been used.", "error")
+            return redirect(url_for('register_request'))
 
         # Trim INVITE_ prefix before rendering
         invite['society_name'] = invite['society_name'].removeprefix('INVITE_')
