@@ -14,6 +14,9 @@ import pytz
 import requests
 from flask import make_response
 # -------------------------
+# --- FIX: Import hashing functions ---
+from werkzeug.security import generate_password_hash, check_password_hash
+# -------------------------
 
 # Define your local timezone (assuming IST)
 IST = pytz.timezone('Asia/Kolkata') 
@@ -52,10 +55,10 @@ EMAIL_FROM = os.getenv('MAIL_USERNAME')
 # --- SYSTEM CONSTANTS (optional tracking) ---
 SYSTEM_ADMIN_ID = '_SYSTEM_'  # for internal audit tracking if used elsewhere
 
-# --- INITIAL SUPER ADMIN SETUP (modified for plain text) ---
+# --- INITIAL SUPER ADMIN SETUP (FIX: Hashing enabled) ---
 DEFAULT_SUPER_ADMIN_PASSWORD = os.getenv("DEFAULT_SUPER_ADMIN_PASSWORD")
-# --- FIX A: Store plain text password, not a hash ---
-DEFAULT_SUPER_ADMIN_HASH = DEFAULT_SUPER_ADMIN_PASSWORD
+# --- FIX: Generate a hash from the plain text password ---
+DEFAULT_SUPER_ADMIN_HASH = generate_password_hash(DEFAULT_SUPER_ADMIN_PASSWORD)
 # -------------------------------------------------------------
 
 def get_current_user():
@@ -226,8 +229,9 @@ def generate_invite_from_request(request_data, conn):
     # Set expiry 2 days from now, using the defined IST timezone
     invite_end_at = datetime.now(IST) + timedelta(days=2) 
     
-    # --- NO FIX: Hashing is preserved for new society admins ---
-    DUMMY_HASH = 'dummy_pass'
+    # --- FIX: Hash the dummy password ---
+    DUMMY_HASH = generate_password_hash('dummy_pass_placeholder')
+    # ------------------------------------
 
     with conn.cursor() as cur:
         # 1. Insert into new_admins (as placeholder invite)
@@ -281,9 +285,9 @@ def ensure_super_admin_exists():
             """, (
                 SYSTEM_ADMIN_ID, 
                 'super_admin', 
-                # --- FIX B: Insert plain text password directly, assuming TEXT column ---
-                DEFAULT_SUPER_ADMIN_HASH, # Pass plain string
-                # ------------------------------------------------------------------------
+                # --- FIX: Insert the HASH generated at startup ---
+                DEFAULT_SUPER_ADMIN_HASH, # Pass the hash
+                # --------------------------------------------------
                 'system_placeholder@internal.com', 
                 1666
             ))
@@ -332,8 +336,10 @@ def super_admin_dashboard():
             if conn: conn.close()
 
         if user_record and password:
-            stored_pwd = user_record['password_hash']
-            if password == stored_pwd:
+            stored_hash = user_record['password_hash']
+            # --- FIX: Check hashed password ---
+            if check_password_hash(stored_hash, password):
+            # --------------------------------
                 session['user_id'] = SYSTEM_ADMIN_ID
                 flash(f'Login successful. Welcome, {user_record["role"]}!', 'success')
                 next_page = request.args.get('next')
@@ -363,7 +369,9 @@ def super_admin_dashboard():
             dummy_email = f"dummy_{uuid.uuid4().hex[:8]}@invite.com"
             invite_end_time = datetime.now(IST) + timedelta(days=2)
             DUMMY_MOBILE = '9999999999'
-            DUMMY_HASH = 'dummy_pass'            
+            # --- FIX: Hash the dummy password ---
+            DUMMY_HASH = generate_password_hash('dummy_pass')  
+            # ------------------------------------
             try:
                 conn = get_db_conn()
                 cursor = conn.cursor()
@@ -378,7 +386,7 @@ def super_admin_dashboard():
                     'admin', 
                     DUMMY_MOBILE, 
                     dummy_email, 
-                    DUMMY_HASH, 
+                    DUMMY_HASH, # Insert the hash
                     token, 
                     invite_end_time,
                     2, 
@@ -721,7 +729,9 @@ def open_invite():
                 flash("All fields are required.", "error")
                 return redirect(url_for('open_invite', token=token))
 
-            hashed_password = password  # preserve hashing logic
+            # --- FIX: Hash the password ---
+            hashed_password = generate_password_hash(password)
+            # ------------------------------
 
             conn = get_db_conn()
             cursor = conn.cursor()
@@ -865,6 +875,8 @@ def approve_society(society_name):
             return redirect(url_for('super_admin_dashboard'))
 
         # Insert into admins table
+        # NOTE: new_society['password_hash'] is already a hash
+        # because it was created in the open_invite() route.
         admin_insert_tuple = (
             new_society['society_name'], 
             'admin', 

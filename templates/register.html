@@ -29,7 +29,7 @@
 
         /* Gradient saffron header background */
         .card-header {
-            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #138808 100%);
+            background: linear-gradient(to bottom, #FF9933 33.33%, #FFFFFF 66.66%, #84a8f8 100%);
             display: flex;
             align-items: center;
             overflow: hidden;
@@ -127,13 +127,13 @@
 
             <div class="card-body">
                 {% with messages = get_flashed_messages(with_categories=true) %}
-                  {% if messages %}
-                    {% for category, message in messages %}
-                      <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'warning') }}" role="alert">
-                        {{ message }}
-                      </div>
-                    {% endfor %}
-                  {% endif %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else ('success' if category == 'success' else 'warning') }}" role="alert">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
                 {% endwith %}
 
                 <p class="text-info">
@@ -179,8 +179,15 @@
 
                     <div class="form-group">
                         <label for="password">Set Master Password:</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
-                        <small class="form-text text-muted">This will be the main admin password for the society.</small>
+                        <input 
+                            type="password" 
+                            class="form-control" 
+                            id="password" 
+                            name="password" 
+                            required
+                            minlength="8" 
+                            autocomplete="new-password">
+                        <small class="form-text text-muted">This will be the main admin password for the society. **Minimum 8 characters required.**</small>
                     </div>
 
                     <div class="form-group">
