@@ -16,8 +16,7 @@ from flask import make_response
 # -------------------------
 # --- FIX: Import hashing functions ---
 from werkzeug.security import generate_password_hash, check_password_hash
-# -------------------------
-
+# ------------------------- 
 # Define your local timezone (assuming IST)
 IST = pytz.timezone('Asia/Kolkata') 
 
@@ -167,12 +166,12 @@ def send_email_brevo(to_email, subject, body):
         # 💡 CRITICAL LOG: Captures connection, network, or import errors
         print(f"❌ send_email_brevo exception: {e}") 
         return False
-
-
+ 
 def send_final_approval_email(recipient_email, society_name):
     """Send the final approval email after society approval."""
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
     
+    # Create the plain text body
     body = f"""Dear Admin of {society_name},
 
 We are pleased to inform you that your registration request for '{society_name}' has been officially approved.
@@ -187,22 +186,18 @@ Sincerely,
 SIVA Admin Team.
 """.strip()
 
-    return send_email_brevo(recipient_email, subject, body)
+    # Wrap the body in HTML for HTML email clients
+    html_body = f"<html><body style='font-family:Arial,sans-serif;'>{body.replace('\n', '<br>')}</body></html>"
 
-    # Debugging step: Print out the body to make sure it has content
-    print(f"Email Body:\n{body}") 
+    # Send the email using the Brevo API
+    email_sent = send_email_brevo(recipient_email, subject, body)  # Send both plain text and HTML versions
 
-    # Continue with sending the email
-    try:
-        # Calls the corrected function
-        result = send_email_brevo(recipient_email, subject, body)
-        return True if result else False
-    except Exception as e: 
-        # The exception here will only trigger if send_email_brevo has an unexpected crash,
-        # but the actual API error handling is now inside send_email_brevo.
-        flash(f"🚨 Error while sending email: {e}", 'error')
+    if email_sent:
+        return True
+    else:
+        flash("🚨 Error while sending the final approval email.", 'error')
         return False
-    
+ 
 def send_invite_email(recipient_email, society_name, invite_token, registration_link):
     """Send registration invitation email (Resend or simulate)."""
     subject = f"Registration Invitation for {society_name}"
@@ -932,7 +927,8 @@ def approve_society(society_name):
         conn.commit()  # Commit changes to the database
 
         # ✅ Send the final approval email after commit
-        email_sent = send_final_approval_email(new_society['email'], new_society['society_name'])
+        email_sent = send_final_approval_email(new_society['email'], 
+            new_society['society_name'])
 
         if email_sent:
             flash(f"🎉 Society '{society_name}' successfully **approved** and added to live system. Final email sent!", 'success')
