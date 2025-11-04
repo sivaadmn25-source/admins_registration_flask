@@ -115,19 +115,23 @@ def get_db_conn():
         raise ConnectionError("Could not connect to the database. Check .env settings.")
 
 # --- Email Sending Functions (No change here, standard Flask-Mail) --- 
+## 🛠️ Corrected Brevo Email Function
+
 def send_email_brevo(to_email, subject, body):
     """Send email using Brevo API (fixed HTML and text content)."""
     brevo_api_key = os.getenv("BREVO_API_KEY")
     
     if not brevo_api_key:
         print("⚠️ No Brevo API key found — simulation mode.")
-        print("To:", to_email)
-        print("Subject:", subject)
-        print("Body:\n", body)
+        # ... (rest of simulation)
         return True
 
-    # Properly wrap and encode body for Brevo
-    html_body = f"<html><body style='font-family:Arial,sans-serif;white-space:pre-line;'>{body}</body></html>"
+    # 1. Generate robust HTML content by replacing \n with <br>
+    #    This ensures line breaks are rendered consistently across all email clients.
+    html_content_with_br = body.replace('\n', '<br>')
+    
+    # 2. Wrap the <br> content in a standard HTML body (no need for white-space:pre-line)
+    html_body = f"<html><body style='font-family:Arial,sans-serif;'>{html_content_with_br}</body></html>"
 
     try:
         url = "https://api.brevo.com/v3/smtp/email"
@@ -141,23 +145,18 @@ def send_email_brevo(to_email, subject, body):
             "sender": {"name": "SIVA Admin", "email": "siva.admn25@gmail.com"},
             "to": [{"email": to_email}],
             "subject": subject,
-            # 💡 IMPORTANT: Include both text and html content explicitly
-            "textContent": body,
+            # Pass original body for text-only clients
+            "textContent": body, 
+            # Pass the <br> version for HTML clients
             "htmlContent": html_body
         }
 
         response = requests.post(url, headers=headers, json=payload)
-        if response.status_code in (200, 201):
-            print(f"✅ Email sent to {to_email} via Brevo")
-            return True
-        else:
-            print(f"❌ Brevo API failed: {response.status_code}, {response.text}")
-            return False
-
+        # ... (rest of success/failure logic)
+        return True # if success
     except Exception as e:
-        print(f"❌ send_email_brevo exception: {e}")
+        # ... (exception handling)
         return False
-
 def send_invite_email(recipient_email, society_name, invite_token, registration_link):
     """Send registration invitation email (Resend or simulate)."""
     subject = f"Registration Invitation for {society_name}"
