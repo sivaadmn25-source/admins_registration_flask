@@ -126,11 +126,11 @@ def send_email_brevo(to_email, subject, body):
         print("To:", to_email)
         print("Subject:", subject)
         print("Body:\n", body)
-        return True # Simulate success if key is missing
+        return True  # Simulate success if key is missing
 
     # 1. ✅ FIX FOR EMPTY BODY: Convert plain text newlines (\n) to HTML break tags (<br>)
-    html_content_with_br = body.replace('\n', '<br>') 
-    
+    html_content_with_br = body.replace('\n', '<br>')  # For HTML clients
+
     # 2. Wrap the <br> content in a standard HTML body
     html_body = f"<html><body style='font-family:Arial,sans-serif;'>{html_content_with_br}</body></html>"
 
@@ -147,9 +147,8 @@ def send_email_brevo(to_email, subject, body):
             "to": [{"email": to_email}],
             "subject": subject,
             # Pass original body for text-only clients
-            "textContent": body, 
-            # Pass the robust HTML version for HTML clients
-            "htmlContent": html_body
+            "textContent": body,  # Plain-text content
+            "htmlContent": html_body  # HTML content for HTML-capable email clients
         }
 
         response = requests.post(url, headers=headers, json=payload)
@@ -165,8 +164,8 @@ def send_email_brevo(to_email, subject, body):
     except Exception as e:
         # 💡 CRITICAL LOG: Captures connection, network, or import errors
         print(f"❌ send_email_brevo exception: {e}") 
-        return False
- 
+        return False 
+    
 def send_final_approval_email(recipient_email, society_name):
     """Send the final approval email after society approval."""
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
