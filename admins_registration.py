@@ -118,19 +118,21 @@ def get_db_conn():
 ## 🛠️ Corrected Brevo Email Function
 
 def send_email_brevo(to_email, subject, body):
-    """Send email using Brevo API (fixed HTML and text content)."""
+    """Send email using Brevo API (with robust HTML and error handling)."""
+    # NOTE: You MUST have 'requests' imported for this function to work.
     brevo_api_key = os.getenv("BREVO_API_KEY")
     
     if not brevo_api_key:
         print("⚠️ No Brevo API key found — simulation mode.")
-        # ... (rest of simulation)
-        return True
+        print("To:", to_email)
+        print("Subject:", subject)
+        print("Body:\n", body)
+        return True # Simulate success if key is missing
 
-    # 1. Generate robust HTML content by replacing \n with <br>
-    #    This ensures line breaks are rendered consistently across all email clients.
-    html_content_with_br = body.replace('\n', '<br>')
+    # 1. ✅ FIX FOR EMPTY BODY: Convert plain text newlines (\n) to HTML break tags (<br>)
+    html_content_with_br = body.replace('\n', '<br>') 
     
-    # 2. Wrap the <br> content in a standard HTML body (no need for white-space:pre-line)
+    # 2. Wrap the <br> content in a standard HTML body
     html_body = f"<html><body style='font-family:Arial,sans-serif;'>{html_content_with_br}</body></html>"
 
     try:
@@ -147,35 +149,26 @@ def send_email_brevo(to_email, subject, body):
             "subject": subject,
             # Pass original body for text-only clients
             "textContent": body, 
-            # Pass the <br> version for HTML clients
+            # Pass the robust HTML version for HTML clients
             "htmlContent": html_body
         }
 
         response = requests.post(url, headers=headers, json=payload)
-        # ... (rest of success/failure logic)
-        return True # if success
+        
+        if response.status_code in (200, 201):
+            print(f"✅ Email sent to {to_email} via Brevo")
+            return True
+        else:
+            # 💡 CRITICAL LOG: Captures API key (401) or bad request errors (400)
+            print(f"❌ Brevo API failed: {response.status_code}, {response.text}")
+            return False
+
     except Exception as e:
-        # ... (exception handling)
+        # 💡 CRITICAL LOG: Captures connection, network, or import errors
+        print(f"❌ send_email_brevo exception: {e}") 
         return False
-def send_invite_email(recipient_email, society_name, invite_token, registration_link):
-    """Send registration invitation email (Resend or simulate)."""
-    subject = f"Registration Invitation for {society_name}"
-    body = f"""Dear Admin of {society_name},
 
-Your registration request has been approved!
 
-Please use the link below to complete your society's registration and set up your Super Admin account:
-
-{registration_link}
-
-This link is valid for 2 days. If you have any issues, please contact system support.
-
-Thank you,
-The Election Management System Team
-""".strip()  # <-- FIX 2A: Added .strip() to clean string
-    
-    return send_email_brevo(recipient_email, subject, body)
- 
 def send_final_approval_email(recipient_email, society_name):
     """Send the final approval email after society approval."""
     subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
@@ -195,16 +188,38 @@ SIVA Admin Team.
 """.strip()
 
     # Debugging step: Print out the body to make sure it has content
-    print(f"Email Body:\n{body}")  # <-- This will print the body content in your terminal or logs
+    print(f"Email Body:\n{body}") 
 
     # Continue with sending the email
     try:
+        # Calls the corrected function
         result = send_email_brevo(recipient_email, subject, body)
         return True if result else False
     except Exception as e: 
+        # The exception here will only trigger if send_email_brevo has an unexpected crash,
+        # but the actual API error handling is now inside send_email_brevo.
         flash(f"🚨 Error while sending email: {e}", 'error')
         return False
+    
+def send_invite_email(recipient_email, society_name, invite_token, registration_link):
+    """Send registration invitation email (Resend or simulate)."""
+    subject = f"Registration Invitation for {society_name}"
+    body = f"""Dear Admin of {society_name},
 
+Your registration request has been approved!
+
+Please use the link below to complete your society's registration and set up your Super Admin account:
+
+{registration_link}
+
+This link is valid for 2 days. If you have any issues, please contact system support.
+
+Thank you,
+The Election Management System Team
+""".strip()  # <-- FIX 2A: Added .strip() to clean string
+    
+    return send_email_brevo(recipient_email, subject, body)
+  
 def send_rejection_email(recipient_email, society_name, reason=None):
     """Send rejection email (Resend or simulate)."""
     subject = f"❌ Your Society Application ({society_name}) Has Been Rejected"
