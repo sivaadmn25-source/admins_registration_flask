@@ -173,13 +173,11 @@ def send_final_approval_email(recipient_email, society_name):
     # Create the plain text body
     body = f"""Dear Admin of {society_name},
 
-    Access the URL: https://siva-admin-activities.onrender.com/system-entry
+        Access the admin activities URL: https://siva-admin-activities.onrender.com/system-entry
+        If you have any questions, please feel free to contact by replying us.
 
-    If you have any questions, please feel free to contact us.
-
-Sincerely,
-SIVA Admin Team.
-""".strip()
+    Sincerely,
+    SIVA Admin Team.""" .strip()
 
     # Wrap the body in HTML for HTML email clients
     html_body = f"<html><body style='font-family:Arial,sans-serif;'>{body.replace('\n', '<br>')}</body></html>"
