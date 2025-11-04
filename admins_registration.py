@@ -187,6 +187,8 @@ Sincerely,
 SIVA Admin Team.
 """.strip()
 
+    return send_email_brevo(recipient_email, subject, body)
+
     # Debugging step: Print out the body to make sure it has content
     print(f"Email Body:\n{body}") 
 
