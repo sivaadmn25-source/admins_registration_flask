@@ -165,38 +165,32 @@ def send_email_brevo(to_email, subject, body):
         # 💡 CRITICAL LOG: Captures connection, network, or import errors
         print(f"❌ send_email_brevo exception: {e}") 
         return False 
+        
+def send_final_approval_email(recipient_email, society_name):
+    """Send the final approval email after society approval."""
+    subject = f"✅ Your Society Application ({society_name}) Has Been Approved"
+    
+    # Create the plain text body
+    body = f"""Dear Admin of {society_name},
 
-def send_final_approval_email(to_email, society_name):
-    try:
-        subject = f"Final Approval for {society_name}"
-        body = (
-            f"Dear {society_name} Admin,\n\n"
-            f"Congratulations! Your society '{society_name}' has been fully approved and activated in the system.\n\n"
-            f"You can now log in using your registered email credentials on: https://siva-admin-activities.onrender.com/system-entry\n\n"
-            f"Welcome aboard!\n\n"
-            f"Regards,\nSuper Admin Team"
-        )
+    Access the URL: https://siva-admin-activities.onrender.com/system-entry
 
-        msg = MIMEText(body)
-        msg['Subject'] = subject
-        msg['From'] = os.getenv("EMAIL_SENDER")  # e.g. the Brevo verified sender
-        msg['To'] = to_email
+    If you have any questions, please feel free to contact us.
 
-        # Brevo SMTP settings
-        smtp_server = "smtp-relay.brevo.com"
-        smtp_port = 587
-        smtp_user = os.getenv("SMTP_USERNAME")  # usually your Brevo login email
-        smtp_pass = os.getenv("SMTP_PASSWORD")  # the Brevo SMTP key
+Sincerely,
+SIVA Admin Team.
+""".strip()
 
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
+    # Wrap the body in HTML for HTML email clients
+    html_body = f"<html><body style='font-family:Arial,sans-serif;'>{body.replace('\n', '<br>')}</body></html>"
 
+    # Send the email using the Brevo API
+    email_sent = send_email_brevo(recipient_email, subject, body)  # Send both plain text and HTML versions
+
+    if email_sent:
         return True
-
-    except Exception as e:
-        app.logger.error(f"Final approval email failed via Brevo to {to_email}: {e}")
+    else:
+        flash("🚨 Error while sending the final approval email.", 'error')
         return False
  
 def send_invite_email(recipient_email, society_name, invite_token, registration_link):
